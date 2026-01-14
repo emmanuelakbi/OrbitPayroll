@@ -3,7 +3,6 @@
 import { useCallback, useEffect } from "react";
 import { useAccount, useSignMessage, useDisconnect } from "wagmi";
 import { useMutation } from "@tanstack/react-query";
-import { SiweMessage } from "siwe";
 import { api, setTokens, clearTokens, getAccessToken } from "@/lib/api/client";
 import { useAuthStore } from "./store";
 
@@ -54,26 +53,13 @@ export function useAuth() {
     setLoading(true);
 
     try {
-      // Step 1: Get nonce from backend
-      const { nonce } = await getNonceMutation.mutateAsync(address);
+      // Step 1: Get nonce and pre-built SIWE message from backend
+      const { nonce, message } = await getNonceMutation.mutateAsync(address);
 
-      // Step 2: Create SIWE message
-      const message = new SiweMessage({
-        domain: window.location.host,
-        address,
-        statement: "Sign in to OrbitPayroll",
-        uri: window.location.origin,
-        version: "1",
-        chainId: 1, // Mainnet
-        nonce,
-      });
+      // Step 2: Request signature from wallet using backend's message
+      const signature = await signMessageAsync({ message });
 
-      const messageToSign = message.prepareMessage();
-
-      // Step 3: Request signature from wallet
-      const signature = await signMessageAsync({ message: messageToSign });
-
-      // Step 4: Verify signature with backend
+      // Step 3: Verify signature with backend
       await verifyMutation.mutateAsync({
         walletAddress: address,
         signature,

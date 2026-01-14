@@ -18,6 +18,8 @@ export interface PaginatedResponse<T> {
 // Auth types
 export interface NonceResponse {
   nonce: string;
+  message: string;
+  expiresAt: string;
 }
 
 export interface VerifyRequest {
