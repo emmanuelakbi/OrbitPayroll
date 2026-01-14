@@ -21,8 +21,9 @@ export interface NonceResponse {
 }
 
 export interface VerifyRequest {
-  message: string;
+  walletAddress: string;
   signature: string;
+  nonce: string;
 }
 
 export interface VerifyResponse {

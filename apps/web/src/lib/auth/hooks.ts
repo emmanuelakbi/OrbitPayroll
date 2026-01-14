@@ -37,7 +37,7 @@ export function useAuth() {
 
   // Verify signature mutation
   const verifyMutation = useMutation({
-    mutationFn: (data: { message: string; signature: string }) =>
+    mutationFn: (data: { walletAddress: string; signature: string; nonce: string }) =>
       api.auth.verify(data),
     onSuccess: (data) => {
       setTokens(data.accessToken, data.refreshToken);
@@ -75,8 +75,9 @@ export function useAuth() {
 
       // Step 4: Verify signature with backend
       await verifyMutation.mutateAsync({
-        message: messageToSign,
+        walletAddress: address,
         signature,
+        nonce,
       });
 
       return true;
