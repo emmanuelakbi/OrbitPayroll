@@ -11,13 +11,26 @@ const nextConfig = {
     "viem",
     "@tanstack/react-query",
   ],
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     // Resolve modules from root node_modules
     config.resolve.modules = [
       path.resolve(__dirname, "node_modules"),
       path.resolve(__dirname, "../../node_modules"),
       "node_modules",
     ];
+
+    // Fix for Web3 libraries that use Node.js modules
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      encoding: false,
+      "pino-pretty": false,
+    };
+
+    // Externalize optional dependencies for server-side
+    if (isServer) {
+      config.externals.push("encoding", "pino-pretty");
+    }
+
     return config;
   },
 };
