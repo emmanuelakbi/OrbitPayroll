@@ -16,7 +16,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import type { ApiConfig } from '@orbitpayroll/config';
-import { requestLogger, correlationIdMiddleware, getCorrelationId } from './request-logger.js';
+import { requestLogger, correlationIdMiddleware } from './request-logger.js';
 import { createRateLimiters } from './rate-limiter.js';
 
 // Re-export validation middleware

@@ -79,7 +79,7 @@ interface ErrorResponse {
  */
 interface ErrorLogContext {
   correlationId: string;
-  errorCode?: string;
+  errorCode?: string | undefined;
   errorMessage: string;
   path: string;
   method: string;

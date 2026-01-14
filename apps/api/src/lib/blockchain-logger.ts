@@ -85,7 +85,7 @@ export interface RpcErrorContext extends LogContext {
   rpcMethod: string;
   durationMs: number;
   params?: unknown;
-  errorCode?: string | number;
+  errorCode?: string | number | undefined;
   errorMessage: string;
 }
 
