@@ -44,7 +44,11 @@ export function NotificationBell({ className }: NotificationBellProps) {
     gcTime: 2 * 60 * 1000, // 2 minutes cache
   });
 
-  const notifications = notificationsData?.data ?? [];
+  // Memoize notifications to prevent useCallback dependency changes
+  const notifications = React.useMemo(
+    () => notificationsData?.data ?? [],
+    [notificationsData?.data]
+  );
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   // Mark single notification as read
