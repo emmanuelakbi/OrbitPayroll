@@ -264,7 +264,10 @@ export const api = {
 
   // Organization endpoints
   orgs: {
-    list: () => request<Organization[]>("GET", "/orgs"),
+    list: async () => {
+      const response = await request<{ data: Organization[]; meta: { total: number } }>("GET", "/orgs");
+      return Array.isArray(response) ? response : (response?.data ?? []);
+    },
 
     get: (id: string) => request<Organization>("GET", `/orgs/${id}`),
 

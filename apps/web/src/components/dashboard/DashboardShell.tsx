@@ -42,12 +42,15 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
   // Fetch organizations
   const {
-    data: organizations = [],
+    data: orgsData = [],
     isLoading: orgsLoading,
   } = useQuery({
     queryKey: ["organizations"],
     queryFn: () => api.orgs.list(),
   });
+
+  // Ensure organizations is always an array
+  const organizations = Array.isArray(orgsData) ? orgsData : [];
 
   // Initialize current org from storage or first org
   React.useEffect(() => {
