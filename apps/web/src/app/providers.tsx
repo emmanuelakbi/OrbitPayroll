@@ -16,9 +16,14 @@ function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 60 * 1000, // 1 minute
-        retry: 1,
-        refetchOnWindowFocus: false,
+        staleTime: 30 * 1000, // 30 seconds - data is considered fresh for 30s
+        gcTime: 5 * 60 * 1000, // 5 minutes - cache garbage collection time
+        retry: 2, // Retry failed requests twice
+        refetchOnWindowFocus: false, // Don't refetch on window focus
+        refetchOnReconnect: true, // Refetch when reconnecting
+      },
+      mutations: {
+        retry: 1, // Retry failed mutations once
       },
     },
   });

@@ -11,8 +11,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")  // Direct connection for migrations (bypasses connection pooler)
 }
 
 // ============================================
@@ -122,6 +123,8 @@ model Contractor {
 
   @@index([orgId])
   @@index([orgId, active])
+  @@index([orgId, walletAddress, active])
+  @@index([orgId, name])
   @@map("contractors")
 }
 
@@ -152,6 +155,7 @@ model PayrollRun {
   org   Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   items PayrollItem[]
 
+  @@index([orgId, createdAt])
   @@index([orgId, executedAt])
   @@index([txHash])
   @@map("payroll_runs")

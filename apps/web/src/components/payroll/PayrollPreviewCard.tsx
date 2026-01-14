@@ -13,6 +13,16 @@ interface PayrollPreviewCardProps {
   isLoading?: boolean;
 }
 
+/**
+ * Accessible Payroll Preview Card component.
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Proper heading structure
+ * - Descriptive labels for screen readers
+ * - Status information uses text, not just color
+ * 
+ * Validates: Requirements 7.1, 7.3, 7.5
+ */
 export function PayrollPreviewCard({
   preview,
   isLoading = false,
@@ -22,14 +32,15 @@ export function PayrollPreviewCard({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
+            <Users className="h-5 w-5" aria-hidden="true" />
             Payroll Preview
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-full" />
+        <CardContent className="space-y-4" role="status" aria-label="Loading payroll preview">
+          <Skeleton className="h-8 w-full" aria-hidden="true" />
+          <Skeleton className="h-8 w-full" aria-hidden="true" />
+          <Skeleton className="h-8 w-full" aria-hidden="true" />
+          <span className="sr-only">Loading payroll preview...</span>
         </CardContent>
       </Card>
     );
@@ -40,13 +51,13 @@ export function PayrollPreviewCard({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
+            <Users className="h-5 w-5" aria-hidden="true" />
             Payroll Preview
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
-            <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <Users className="h-12 w-12 mx-auto mb-4 opacity-50" aria-hidden="true" />
             <p>No active contractors to pay</p>
             <p className="text-sm mt-1">Add contractors to run payroll</p>
           </div>
@@ -59,32 +70,33 @@ export function PayrollPreviewCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
+          <Users className="h-5 w-5" aria-hidden="true" />
           Contractor Breakdown
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
+        <ul className="space-y-3" aria-label="Contractors to be paid">
           {preview.contractors.map((contractor) => (
-            <div
+            <li
               key={contractor.id}
-              className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+              className="flex flex-col gap-2 p-3 bg-muted/50 rounded-lg sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="flex flex-col">
                 <span className="font-medium">{contractor.name}</span>
-                <span className="text-sm text-muted-foreground font-mono">
+                <span className="text-sm text-muted-foreground font-mono break-all">
+                  <span className="sr-only">Wallet address: </span>
                   {formatAddress(contractor.walletAddress)}
                 </span>
               </div>
-              <div className="text-right">
-                <span className="font-semibold">
+              <div className="text-left sm:text-right">
+                <span className="font-semibold" aria-label={`Payment amount: ${formatMnee(contractor.amount)} MNEE`}>
                   {formatMnee(contractor.amount)}
                 </span>
-                <span className="text-sm text-muted-foreground ml-1">MNEE</span>
+                <span className="text-sm text-muted-foreground ml-1" aria-hidden="true">MNEE</span>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </CardContent>
     </Card>
   );
@@ -95,6 +107,16 @@ interface PayrollSummaryCardProps {
   isLoading?: boolean;
 }
 
+/**
+ * Accessible Payroll Summary Card component.
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Proper heading structure
+ * - Alert role for insufficient balance warning
+ * - Status information uses text, not just color
+ * 
+ * Validates: Requirements 7.1, 7.3, 7.5
+ */
 export function PayrollSummaryCard({
   preview,
   isLoading = false,
@@ -104,14 +126,15 @@ export function PayrollSummaryCard({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5" />
+            <Wallet className="h-5 w-5" aria-hidden="true" />
             Payment Summary
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Skeleton className="h-12 w-32" />
-          <Skeleton className="h-4 w-48" />
-          <Skeleton className="h-4 w-48" />
+        <CardContent className="space-y-4" role="status" aria-label="Loading payment summary">
+          <Skeleton className="h-12 w-32" aria-hidden="true" />
+          <Skeleton className="h-4 w-48" aria-hidden="true" />
+          <Skeleton className="h-4 w-48" aria-hidden="true" />
+          <span className="sr-only">Loading payment summary...</span>
         </CardContent>
       </Card>
     );
@@ -129,33 +152,33 @@ export function PayrollSummaryCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Wallet className="h-5 w-5" />
+          <Wallet className="h-5 w-5" aria-hidden="true" />
           Payment Summary
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Total Amount */}
         <div>
-          <p className="text-sm text-muted-foreground">Total Payroll</p>
-          <p className="text-3xl font-bold">{formatMnee(preview.total)}</p>
-          <p className="text-sm text-muted-foreground">MNEE</p>
+          <p className="text-sm text-muted-foreground" id="total-payroll-label">Total Payroll</p>
+          <p className="text-3xl font-bold" aria-labelledby="total-payroll-label">{formatMnee(preview.total)}</p>
+          <p className="text-sm text-muted-foreground" aria-hidden="true">MNEE</p>
         </div>
 
         {/* Balance Comparison */}
-        <div className="space-y-2 pt-4 border-t">
+        <dl className="space-y-2 pt-4 border-t">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Treasury Balance:</span>
-            <span className="font-medium">
+            <dt className="text-muted-foreground">Treasury Balance:</dt>
+            <dd className="font-medium">
               {formatMnee(preview.treasuryBalance)} MNEE
-            </span>
+            </dd>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Required Amount:</span>
-            <span className="font-medium">{formatMnee(preview.total)} MNEE</span>
+            <dt className="text-muted-foreground">Required Amount:</dt>
+            <dd className="font-medium">{formatMnee(preview.total)} MNEE</dd>
           </div>
           <div className="flex justify-between text-sm font-medium">
-            <span>After Payroll:</span>
-            <span
+            <dt>After Payroll:</dt>
+            <dd
               className={
                 preview.isSufficient ? "text-green-600" : "text-destructive"
               }
@@ -163,14 +186,21 @@ export function PayrollSummaryCard({
               {preview.isSufficient
                 ? `${formatMnee((balanceBigInt - totalBigInt).toString())} MNEE`
                 : `-${formatMnee(deficit.toString())} MNEE`}
-            </span>
+              <span className="sr-only">
+                {preview.isSufficient ? " (sufficient funds)" : " (insufficient funds)"}
+              </span>
+            </dd>
           </div>
-        </div>
+        </dl>
 
         {/* Insufficient Balance Warning */}
         {!preview.isSufficient && (
-          <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+          <div 
+            className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg"
+            role="alert"
+            aria-live="polite"
+          >
+            <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" aria-hidden="true" />
             <div className="text-sm">
               <p className="font-medium text-destructive">Insufficient Balance</p>
               <p className="text-muted-foreground">

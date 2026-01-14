@@ -1,0 +1,57 @@
+# =============================================================================
+# Docker Ignore for OrbitPayroll API
+# =============================================================================
+# Excludes files not needed in Docker build context
+
+# Dependencies (will be installed fresh)
+node_modules
+**/node_modules
+
+# Build outputs (will be rebuilt)
+dist
+**/dist
+.next
+**/.next
+
+# Development files
+*.log
+npm-debug.log*
+.env
+.env.local
+.env.*.local
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+**/test/
+coverage/
+**/coverage/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Docker files (prevent recursive copy)
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# CI/CD
+.github/
+
+# Misc
+.kiro/
+scripts/
+*.tsbuildinfo

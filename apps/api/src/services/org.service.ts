@@ -7,6 +7,7 @@
 import { db } from '../lib/db.js';
 import { AppError, ErrorCode, OrgError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import { auditLogger } from '../lib/audit-logger.js';
 import type { Role } from '@orbitpayroll/database';
 
 export interface OrgResponse {
@@ -63,6 +64,18 @@ export async function createOrganization(
   });
 
   logger.info({ orgId: org.id, userId }, 'Organization created');
+
+  // Audit log: organization created (Requirement 5.5)
+  await auditLogger.orgCreated(
+    {
+      orgName: name,
+      treasuryAddress,
+    },
+    {
+      userId,
+      orgId: org.id,
+    }
+  );
 
   return formatOrgResponse(org);
 }
@@ -336,6 +349,19 @@ export async function addMember(
 
   logger.info({ orgId, userId: user.id, role }, 'Member added to organization');
 
+  // Audit log: member added (Requirement 5.5)
+  await auditLogger.memberAdded(
+    {
+      memberId: member.id,
+      memberWalletAddress: walletAddress.toLowerCase(),
+      role,
+    },
+    {
+      userId: callerUserId,
+      orgId,
+    }
+  );
+
   return formatMemberResponse(member);
 }
 
@@ -463,6 +489,20 @@ export async function updateMemberRole(
 
   logger.info({ orgId, memberId, newRole }, 'Member role updated');
 
+  // Audit log: member role changed (Requirement 5.5)
+  await auditLogger.memberRoleChanged(
+    {
+      memberId,
+      memberWalletAddress: updated.user.walletAddress,
+      role: newRole,
+      previousRole: member.role,
+    },
+    {
+      userId: callerUserId,
+      orgId,
+    }
+  );
+
   return formatMemberResponse(updated);
 }
 
@@ -524,4 +564,23 @@ export async function removeMember(
   });
 
   logger.info({ orgId, memberId }, 'Member removed from organization');
+
+  // Get the user's wallet address for audit log
+  const user = await db.user.findUnique({
+    where: { id: member.userId },
+    select: { walletAddress: true },
+  });
+
+  // Audit log: member removed (Requirement 5.5)
+  await auditLogger.memberRemoved(
+    {
+      memberId,
+      memberWalletAddress: user?.walletAddress ?? 'unknown',
+      role: member.role,
+    },
+    {
+      userId: callerUserId,
+      orgId,
+    }
+  );
 }

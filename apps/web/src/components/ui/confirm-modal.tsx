@@ -59,7 +59,14 @@ const variantConfig: Record<
 
 /**
  * Reusable confirmation modal for destructive or important actions.
- * Validates: Requirements 9.7
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Focus trapped within modal when open
+ * - Escape key closes modal
+ * - Proper ARIA attributes for dialog pattern
+ * - Loading state communicated via aria-busy
+ * 
+ * Validates: Requirements 7.1, 7.2, 7.3, 9.7
  */
 export function ConfirmModal({
   isOpen,
@@ -75,6 +82,7 @@ export function ConfirmModal({
 }: ConfirmModalProps) {
   const [isConfirming, setIsConfirming] = React.useState(false);
   const config = variantConfig[variant];
+  const cancelButtonRef = React.useRef<HTMLButtonElement>(null);
 
   const handleConfirm = async () => {
     setIsConfirming(true);
@@ -87,6 +95,15 @@ export function ConfirmModal({
 
   const loading = isLoading || isConfirming;
 
+  // Focus cancel button when modal opens (safer default for destructive actions)
+  React.useEffect(() => {
+    if (isOpen) {
+      requestAnimationFrame(() => {
+        cancelButtonRef.current?.focus();
+      });
+    }
+  }, [isOpen]);
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && !loading && onClose()}>
       <DialogContent>
@@ -97,6 +114,7 @@ export function ConfirmModal({
                 "w-10 h-10 rounded-full flex items-center justify-center",
                 config.iconBg
               )}
+              aria-hidden="true"
             >
               <span className={config.iconColor}>{config.icon}</span>
             </div>
@@ -113,6 +131,7 @@ export function ConfirmModal({
 
         <DialogFooter>
           <Button
+            ref={cancelButtonRef}
             type="button"
             variant="outline"
             onClick={onClose}
@@ -125,8 +144,9 @@ export function ConfirmModal({
             variant={config.buttonVariant}
             onClick={handleConfirm}
             disabled={loading}
+            aria-busy={loading}
           >
-            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />}
             {confirmLabel}
           </Button>
         </DialogFooter>

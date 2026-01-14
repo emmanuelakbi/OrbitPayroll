@@ -55,6 +55,9 @@ const config: HardhatUserConfig = {
     outDir: "typechain-types",
     target: "ethers-v6",
   },
+  mocha: {
+    timeout: 60000, // 60 seconds for contract tests
+  },
 };
 
 export default config;

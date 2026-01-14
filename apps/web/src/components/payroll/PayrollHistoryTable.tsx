@@ -35,6 +35,17 @@ const statusLabels: Record<PayrollRun["status"], string> = {
   FAILED: "Failed",
 };
 
+/**
+ * Accessible Payroll History Table component.
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Proper table semantics with scope attributes
+ * - Action buttons have accessible labels
+ * - Status badges use text, not just color
+ * - External links indicate they open in new window
+ * 
+ * Validates: Requirements 7.1, 7.2, 7.3, 7.5
+ */
 export function PayrollHistoryTable({
   runs,
   isLoading,
@@ -49,15 +60,15 @@ export function PayrollHistoryTable({
   }
 
   return (
-    <Table>
+    <Table aria-label="Payroll history">
       <TableHeader>
         <TableRow>
-          <TableHead>Date</TableHead>
-          <TableHead>Total MNEE</TableHead>
-          <TableHead>Contractors</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Transaction</TableHead>
-          <TableHead className="w-[100px]">Actions</TableHead>
+          <TableHead scope="col">Date</TableHead>
+          <TableHead scope="col">Total MNEE</TableHead>
+          <TableHead scope="col">Contractors</TableHead>
+          <TableHead scope="col">Status</TableHead>
+          <TableHead scope="col">Transaction</TableHead>
+          <TableHead scope="col" className="w-[100px]">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -69,12 +80,15 @@ export function PayrollHistoryTable({
             <TableCell>{formatMnee(run.totalAmount)} MNEE</TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                {run.contractorCount}
+                <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <span aria-label={`${run.contractorCount} contractors`}>{run.contractorCount}</span>
               </div>
             </TableCell>
             <TableCell>
-              <Badge variant={statusVariants[run.status]}>
+              <Badge 
+                variant={statusVariants[run.status]}
+                aria-label={`Status: ${statusLabels[run.status]}`}
+              >
                 {statusLabels[run.status]}
               </Badge>
             </TableCell>
@@ -85,12 +99,13 @@ export function PayrollHistoryTable({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  aria-label={`View transaction ${formatAddress(run.txHash)} on block explorer (opens in new tab)`}
                 >
                   <span className="font-mono">{formatAddress(run.txHash)}</span>
-                  <ExternalLink className="h-3 w-3" />
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
                 </a>
               ) : (
-                <span className="text-muted-foreground text-sm">—</span>
+                <span className="text-muted-foreground text-sm" aria-label="No transaction">—</span>
               )}
             </TableCell>
             <TableCell>
@@ -98,9 +113,9 @@ export function PayrollHistoryTable({
                 variant="ghost"
                 size="sm"
                 onClick={() => onViewDetails(run)}
-                title="View details"
+                aria-label={`View details for payroll run on ${formatDate(run.executedAt)}`}
               >
-                <Eye className="h-4 w-4 mr-1" />
+                <Eye className="h-4 w-4 mr-1" aria-hidden="true" />
                 Details
               </Button>
             </TableCell>
@@ -138,7 +153,17 @@ function PayrollHistoryTableSkeleton() {
   );
 }
 
-// Mobile card layout for responsive design
+/**
+ * Mobile card layout for responsive design.
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Proper heading structure
+ * - Action buttons have accessible labels
+ * - Touch targets meet 44px minimum
+ * - External links indicate they open in new window
+ * 
+ * Validates: Requirements 7.1, 7.2, 7.3, 8.1, 8.3
+ */
 export function PayrollHistoryCard({
   run,
   onViewDetails,
@@ -147,33 +172,42 @@ export function PayrollHistoryCard({
   onViewDetails: (run: PayrollRun) => void;
 }) {
   return (
-    <div className="p-4 border rounded-lg space-y-3">
+    <article 
+      className="p-4 border rounded-lg space-y-3"
+      aria-label={`Payroll run on ${formatDate(run.executedAt)}`}
+    >
       <div className="flex items-start justify-between">
         <div>
-          <p className="font-medium">{formatDate(run.executedAt)}</p>
+          <h3 className="font-medium">{formatDate(run.executedAt)}</h3>
           <p className="text-sm text-muted-foreground">
             {run.contractorCount} contractor{run.contractorCount !== 1 ? "s" : ""}
           </p>
         </div>
-        <Badge variant={statusVariants[run.status]}>
+        <Badge 
+          variant={statusVariants[run.status]}
+          aria-label={`Status: ${statusLabels[run.status]}`}
+        >
           {statusLabels[run.status]}
         </Badge>
       </div>
-      <div className="flex items-center justify-between text-sm min-h-[44px]">
-        <span className="text-muted-foreground">Total</span>
-        <span className="font-medium">{formatMnee(run.totalAmount)} MNEE</span>
-      </div>
-      {run.txHash && (
+      <dl>
         <div className="flex items-center justify-between text-sm min-h-[44px]">
+          <dt className="text-muted-foreground">Total</dt>
+          <dd className="font-medium">{formatMnee(run.totalAmount)} MNEE</dd>
+        </div>
+      </dl>
+      {run.txHash && (
+        <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Transaction</span>
           <a
             href={getExplorerUrl(run.txHash)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 min-h-[44px] py-2"
+            aria-label={`View transaction ${formatAddress(run.txHash)} on block explorer (opens in new tab)`}
           >
             <span className="font-mono">{formatAddress(run.txHash)}</span>
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink className="h-3 w-3" aria-hidden="true" />
           </a>
         </div>
       )}
@@ -183,11 +217,12 @@ export function PayrollHistoryCard({
           size="default"
           className="w-full min-h-[44px]"
           onClick={() => onViewDetails(run)}
+          aria-label={`View details for payroll run on ${formatDate(run.executedAt)}`}
         >
-          <Eye className="h-4 w-4 mr-2" />
+          <Eye className="h-4 w-4 mr-2" aria-hidden="true" />
           View Details
         </Button>
       </div>
-    </div>
+    </article>
   );
 }

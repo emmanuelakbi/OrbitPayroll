@@ -1,18 +1,34 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-const Table = React.forwardRef<
-  HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
-    <table
-      ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
-      {...props}
-    />
-  </div>
-));
+export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
+  /** Accessible label for the table */
+  "aria-label"?: string;
+  /** ID of element that labels the table */
+  "aria-labelledby"?: string;
+}
+
+/**
+ * Accessible Table component.
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Uses semantic table elements (table, thead, tbody, th, td)
+ * - Supports aria-label or aria-labelledby for screen readers
+ * - Proper scope attributes on header cells
+ * 
+ * Validates: Requirements 7.1, 7.3
+ */
+const Table = React.forwardRef<HTMLTableElement, TableProps>(
+  ({ className, ...props }, ref) => (
+    <div className="relative w-full overflow-auto" role="region" aria-label="Scrollable table">
+      <table
+        ref={ref}
+        className={cn("w-full caption-bottom text-sm", className)}
+        {...props}
+      />
+    </div>
+  )
+);
 Table.displayName = "Table";
 
 const TableHeader = React.forwardRef<
@@ -68,9 +84,10 @@ TableRow.displayName = "TableRow";
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
   React.ThHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
+>(({ className, scope = "col", ...props }, ref) => (
   <th
     ref={ref}
+    scope={scope}
     className={cn(
       "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
       className

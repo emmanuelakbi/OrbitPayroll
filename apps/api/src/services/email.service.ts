@@ -112,10 +112,12 @@ class EmailService {
   /**
    * Send an email asynchronously (non-blocking)
    * Logs the operation and handles errors gracefully
+   *
+   * @param params - Email parameters including recipient, template, and data
    */
-  async sendAsync(params: SendEmailParams): Promise<void> {
+  sendAsync(params: SendEmailParams): void {
     // Fire and forget - don't await
-    this.send(params).catch((error) => {
+    this.send(params).catch((error: unknown) => {
       logger.error({ error, params: { to: params.to, template: params.template } }, 
         'Async email send failed');
     });
@@ -157,7 +159,8 @@ class EmailService {
 
       const [response] = await sgMail.send(msg);
       
-      const messageId = (response.headers['x-message-id'] as string) || `sg-${Date.now()}`;
+      const headers = response.headers as Record<string, string | undefined>;
+      const messageId = headers['x-message-id'] ?? `sg-${Date.now()}`;
       
       logger.info({ to, template, messageId, statusCode: response.statusCode }, 
         'Email sent successfully');

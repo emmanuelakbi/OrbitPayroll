@@ -8,7 +8,12 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest --run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:unit": "vitest --run --exclude '**/**.property.test.{ts,tsx}'",
+    "test:property": "vitest --run src/components/treasury/TreasuryBalanceCard.property.test.ts src/components/payroll/PayrollExecution.property.test.ts src/components/contractors/ContractorFormModal.property.test.ts src/lib/auth/auth.property.test.ts src/lib/error-messages.property.test.ts",
+    "test:coverage": "vitest --run --coverage",
+    "lighthouse": "lhci autorun",
+    "lighthouse:collect": "lhci collect --url=http://localhost:3000"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.0.2",
@@ -28,6 +33,7 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@lhci/cli": "^0.14.0",
     "@tanstack/react-query-devtools": "^5.28.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",

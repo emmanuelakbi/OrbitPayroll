@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { DevBanner } from "@/components/ui/network-indicator";
+import { SkipLink } from "@/components/ui/skip-link";
 import { api } from "@/lib/api";
 import type { Organization } from "@/lib/api/types";
 
@@ -25,6 +26,16 @@ function setStoredOrgId(orgId: string): void {
   localStorage.setItem(ORG_STORAGE_KEY, orgId);
 }
 
+/**
+ * Dashboard Shell component with accessibility features.
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Skip link for keyboard navigation (7.2)
+ * - Proper landmark regions (main, nav, header)
+ * - Focus management for sidebar
+ * 
+ * Validates: Requirements 7.1, 7.2
+ */
 export function DashboardShell({ children }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [currentOrgId, setCurrentOrgId] = React.useState<string | null>(null);
@@ -65,6 +76,9 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Skip link for keyboard navigation - WCAG 2.4.1 */}
+      <SkipLink targetId="main-content" />
+      
       {/* Development Banner - shows testnet/mock status */}
       <DevBanner />
       
@@ -82,8 +96,13 @@ export function DashboardShell({ children }: DashboardShellProps) {
             onOrgChange={handleOrgChange}
           />
 
-          {/* Page content */}
-          <main className="flex-1 p-4 md:p-6 lg:p-8">
+          {/* Page content - main landmark with focusable target for skip link */}
+          <main 
+            id="main-content" 
+            className="flex-1 p-4 md:p-6 lg:p-8 outline-none"
+            tabIndex={-1}
+            aria-label="Main content"
+          >
             <DashboardContext.Provider
               value={{
                 currentOrg,

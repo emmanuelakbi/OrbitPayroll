@@ -57,6 +57,103 @@
     @apply bg-background text-foreground;
   }
   
+  /* ============================================
+   * WCAG 2.1 AA Accessibility Styles
+   * Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7
+   * ============================================ */
+  
+  /* Skip to main content link for keyboard users */
+  .skip-link {
+    @apply absolute -top-10 left-0 bg-primary text-primary-foreground px-4 py-2 z-[200] transition-all;
+  }
+  
+  .skip-link:focus {
+    @apply top-0;
+  }
+  
+  /* Enhanced focus indicators for keyboard navigation (7.7) */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+  
+  /* Ensure focus is visible on all interactive elements */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+  
+  /* High contrast focus for better visibility */
+  @media (prefers-contrast: high) {
+    :focus-visible {
+      @apply ring-4 ring-foreground;
+    }
+  }
+  
+  /* Respect reduced motion preferences (7.1) */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  
+  /* Screen reader only utility class */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+  
+  /* Make sr-only content visible when focused (for skip links) */
+  .sr-only-focusable:focus,
+  .sr-only-focusable:active {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: inherit;
+    margin: inherit;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+  
+  /* Ensure minimum touch target size on mobile (44x44px) */
+  @media (pointer: coarse) {
+    button,
+    a,
+    input[type="checkbox"],
+    input[type="radio"],
+    select {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+  
+  /* Support for browser zoom up to 200% (7.6) */
+  html {
+    font-size: 100%;
+  }
+  
+  /* Ensure text scales properly */
+  body {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  
   /* Mobile-specific fixes for iOS Safari and Android Chrome */
   
   /* Prevent iOS Safari from zooming on input focus */
@@ -104,5 +201,57 @@
   .overflow-y-auto,
   .overflow-x-auto {
     touch-action: pan-y pan-x;
+  }
+}
+
+/* ============================================
+ * Responsive Design Utilities
+ * Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6
+ * ============================================ */
+
+@layer utilities {
+  /* Hide on mobile, show on larger screens */
+  .mobile-hidden {
+    @apply hidden sm:block;
+  }
+  
+  /* Show on mobile, hide on larger screens */
+  .mobile-only {
+    @apply block sm:hidden;
+  }
+  
+  /* Responsive text truncation */
+  .truncate-mobile {
+    @apply truncate sm:overflow-visible sm:whitespace-normal;
+  }
+  
+  /* Responsive padding for page content */
+  .page-padding {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+  
+  /* Responsive card grid */
+  .card-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6;
+  }
+  
+  /* Touch-friendly spacing for mobile */
+  .touch-spacing {
+    @apply space-y-4 sm:space-y-2;
+  }
+  
+  /* Responsive button group */
+  .button-group-responsive {
+    @apply flex flex-col gap-2 sm:flex-row sm:gap-4;
+  }
+  
+  /* Full width on mobile, auto on larger screens */
+  .w-full-mobile {
+    @apply w-full sm:w-auto;
+  }
+  
+  /* Stack on mobile, row on larger screens */
+  .stack-mobile {
+    @apply flex flex-col gap-4 sm:flex-row sm:items-center;
   }
 }

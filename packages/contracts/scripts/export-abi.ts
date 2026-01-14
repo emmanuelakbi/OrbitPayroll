@@ -74,7 +74,7 @@ async function main() {
   }
 
   // Add mainnet MNEE address (known address)
-  mneeAddresses["mainnet"] = "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFB6cF";
+  mneeAddresses["mainnet"] = "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF";
 
   // Create export result
   const exportResult: ExportResult = {

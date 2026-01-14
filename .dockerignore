@@ -1,0 +1,63 @@
+# =============================================================================
+# Docker Ignore for OrbitPayroll Monorepo
+# =============================================================================
+# Excludes files not needed in Docker build context
+
+# Dependencies (will be installed fresh)
+node_modules
+**/node_modules
+
+# Build outputs (will be rebuilt)
+dist
+**/dist
+.next
+**/.next
+
+# Development files
+*.log
+npm-debug.log*
+.env
+.env.local
+.env.*.local
+.env.docker
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+**/test/
+coverage/
+**/coverage/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Git
+.git
+.gitignore
+
+# Documentation (keep README for reference)
+docs/
+
+# Docker files (prevent recursive copy)
+docker-compose*
+
+# CI/CD
+.github/
+
+# Misc
+.kiro/
+scripts/
+*.tsbuildinfo
+
+# Frontend (not needed for API build)
+apps/web/
+
+# Contract artifacts (not needed for API)
+packages/contracts/artifacts/
+packages/contracts/cache/
+packages/contracts/coverage/
+packages/contracts/typechain-types/

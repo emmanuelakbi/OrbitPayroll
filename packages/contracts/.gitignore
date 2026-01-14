@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# Build artifacts
+# Build artifacts (regenerated on compile)
 artifacts/
 cache/
 typechain-types/
@@ -11,8 +11,10 @@ dist/
 coverage/
 coverage.json
 
-# Environment
+# Environment - NEVER commit secrets!
 .env
+.env.local
+.env.*.local
 
 # IDE
 .idea/
@@ -22,3 +24,7 @@ coverage.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Private keys - additional protection
+*.pem
+*.key

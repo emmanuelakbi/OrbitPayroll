@@ -11,6 +11,7 @@ import {
   DashboardSkeleton,
   QueryError,
 } from "@/components/dashboard";
+import { MneeBadge } from "@/components/treasury";
 import { api } from "@/lib/api";
 import { formatMnee } from "@/lib/utils";
 import { Wallet, CreditCard, Clock, ArrowRight, AlertCircle } from "lucide-react";
@@ -20,7 +21,7 @@ export default function DashboardPage() {
   const { user } = useSession();
   const { currentOrg, isLoading: orgLoading } = useDashboard();
 
-  // Fetch treasury data
+  // Fetch treasury data with longer cache time
   const {
     data: treasury,
     isLoading: treasuryLoading,
@@ -30,6 +31,8 @@ export default function DashboardPage() {
     queryKey: ["treasury", currentOrg?.id],
     queryFn: () => api.treasury.get(currentOrg!.id),
     enabled: !!currentOrg?.id,
+    staleTime: 60 * 1000, // 1 minute - treasury balance doesn't change frequently
+    gcTime: 5 * 60 * 1000, // 5 minutes cache
     retry: 2,
   });
 
@@ -43,6 +46,7 @@ export default function DashboardPage() {
     queryKey: ["payroll-preview", currentOrg?.id],
     queryFn: () => api.payroll.preview(currentOrg!.id),
     enabled: !!currentOrg?.id,
+    staleTime: 30 * 1000, // 30 seconds - preview can change as contractors are added
     retry: 2,
   });
 
@@ -67,9 +71,12 @@ export default function DashboardPage() {
   return (
     <div>
       {/* Page Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
-        <p className="text-muted-foreground">
+      <div className="mb-6 sm:mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+          <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
+          <MneeBadge />
+        </div>
+        <p className="text-muted-foreground text-sm sm:text-base">
           Welcome back, {user ? formatAddress(user.walletAddress) : "User"}
         </p>
       </div>
@@ -125,30 +132,31 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Quick Actions */}
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-        <div className="flex flex-wrap gap-4">
-          <Button variant="outline" asChild>
+      {/* Quick Actions - Responsive grid */}
+      <div className="mt-6 sm:mt-8">
+        <h2 className="text-lg sm:text-xl font-semibold mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <Button variant="outline" asChild className="justify-start h-auto py-3 sm:py-2">
             <Link href="/dashboard/contractors">
               Add Contractor
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight className="ml-auto h-4 w-4" aria-hidden="true" />
             </Link>
           </Button>
-          <Button variant="outline" asChild>
+          <Button variant="outline" asChild className="justify-start h-auto py-3 sm:py-2">
             <Link href="/dashboard/treasury">
               Fund Treasury
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight className="ml-auto h-4 w-4" aria-hidden="true" />
             </Link>
           </Button>
           <Button
             variant="outline"
             asChild
             disabled={!isSufficient}
+            className="justify-start h-auto py-3 sm:py-2 sm:col-span-2 lg:col-span-1"
           >
             <Link href="/dashboard/payroll">
               Run Payroll
-              <ArrowRight className="ml-2 h-4 w-4" />
+              <ArrowRight className="ml-auto h-4 w-4" aria-hidden="true" />
             </Link>
           </Button>
         </div>
@@ -156,32 +164,32 @@ export default function DashboardPage() {
 
       {/* Organization Info */}
       {currentOrg && (
-        <div className="mt-8">
-          <h2 className="text-xl font-semibold mb-4">Organization</h2>
+        <div className="mt-6 sm:mt-8">
+          <h2 className="text-lg sm:text-xl font-semibold mb-4">Organization</h2>
           <Card>
             <CardContent className="pt-6">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Name</span>
-                  <span className="font-medium">{currentOrg.name}</span>
+              <dl className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                  <dt className="text-muted-foreground">Name</dt>
+                  <dd className="font-medium">{currentOrg.name}</dd>
                 </div>
                 {currentOrg.treasuryAddress && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Treasury</span>
-                    <span className="font-mono text-sm">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                    <dt className="text-muted-foreground">Treasury</dt>
+                    <dd className="font-mono text-sm break-all">
                       {formatAddress(currentOrg.treasuryAddress)}
-                    </span>
+                    </dd>
                   </div>
                 )}
                 {treasury?.address && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Balance</span>
-                    <span className="font-medium">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
+                    <dt className="text-muted-foreground">Balance</dt>
+                    <dd className="font-medium">
                       {formatMnee(treasury.balance)} MNEE
-                    </span>
+                    </dd>
                   </div>
                 )}
-              </div>
+              </dl>
             </CardContent>
           </Card>
         </div>

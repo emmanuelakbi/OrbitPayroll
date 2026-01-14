@@ -54,6 +54,39 @@ services:
       retries: 5
     command: redis-server --appendonly yes
 
+  # ---------------------------------------------------------------------------
+  # API Backend (Production-like container)
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: orbitpayroll-api
+    restart: unless-stopped
+    profiles:
+      - with-api
+    ports:
+      - "${API_PORT:-3001}:3001"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-orbitpayroll}:${POSTGRES_PASSWORD:-orbitpayroll_dev}@postgres:5432/${POSTGRES_DB:-orbitpayroll}
+      JWT_SECRET: ${JWT_SECRET:-development-secret-key-min-32-chars}
+      RPC_URL: ${RPC_URL:-https://eth-sepolia.g.alchemy.com/v2/demo}
+      CHAIN_ID: ${CHAIN_ID:-11155111}
+      MNEE_TOKEN_ADDRESS: ${MNEE_TOKEN_ADDRESS:-0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
 volumes:
   postgres_data:
     driver: local

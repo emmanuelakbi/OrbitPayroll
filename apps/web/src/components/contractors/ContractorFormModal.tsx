@@ -81,6 +81,18 @@ function weiToRate(wei: string): string {
   return `${integerPart}.${fractionalStr}`;
 }
 
+/**
+ * Accessible Contractor Form Modal component.
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Labels properly associated with inputs via htmlFor/id
+ * - Error messages announced via aria-describedby and role="alert"
+ * - Required fields indicated via aria-required
+ * - Invalid state indicated via aria-invalid
+ * - Auto-focus on first input when modal opens
+ * 
+ * Validates: Requirements 7.1, 7.2, 7.3
+ */
 export function ContractorFormModal({
   isOpen,
   onClose,
@@ -90,6 +102,7 @@ export function ContractorFormModal({
   error,
 }: ContractorFormModalProps) {
   const isEditing = !!contractor;
+  const nameInputRef = React.useRef<HTMLInputElement>(null);
 
   // Form state
   const [name, setName] = React.useState("");
@@ -118,6 +131,11 @@ export function ContractorFormModal({
       }
       setErrors({});
       setTouched({});
+      
+      // Auto-focus first input when modal opens (WCAG 7.2)
+      requestAnimationFrame(() => {
+        nameInputRef.current?.focus();
+      });
     }
   }, [isOpen, contractor]);
 
@@ -237,21 +255,29 @@ export function ContractorFormModal({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4" noValidate>
           {/* Name Field */}
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="contractor-name">
+              Name
+              <span className="text-destructive ml-1" aria-hidden="true">*</span>
+              <span className="sr-only">(required)</span>
+            </Label>
             <Input
-              id="name"
+              ref={nameInputRef}
+              id="contractor-name"
               value={name}
               onChange={(e) => handleChange("name", e.target.value)}
               onBlur={() => handleBlur("name")}
               placeholder="John Doe"
+              aria-required="true"
+              aria-invalid={!!(errors.name && touched.name)}
+              aria-describedby={errors.name && touched.name ? "name-error" : undefined}
               className={errors.name && touched.name ? "border-destructive" : ""}
             />
             {errors.name && touched.name && (
-              <p className="text-sm text-destructive flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
+              <p id="name-error" className="text-sm text-destructive flex items-center gap-1" role="alert">
+                <AlertCircle className="h-3 w-3" aria-hidden="true" />
                 {errors.name}
               </p>
             )}
@@ -259,18 +285,28 @@ export function ContractorFormModal({
 
           {/* Wallet Address Field */}
           <div className="space-y-2">
-            <Label htmlFor="walletAddress">Wallet Address</Label>
+            <Label htmlFor="contractor-wallet">
+              Wallet Address
+              <span className="text-destructive ml-1" aria-hidden="true">*</span>
+              <span className="sr-only">(required)</span>
+            </Label>
             <Input
-              id="walletAddress"
+              id="contractor-wallet"
               value={walletAddress}
               onChange={(e) => handleChange("walletAddress", e.target.value)}
               onBlur={() => handleBlur("walletAddress")}
               placeholder="0x..."
+              aria-required="true"
+              aria-invalid={!!(errors.walletAddress && touched.walletAddress)}
+              aria-describedby={errors.walletAddress && touched.walletAddress ? "wallet-error" : "wallet-hint"}
               className={errors.walletAddress && touched.walletAddress ? "border-destructive" : ""}
             />
+            <p id="wallet-hint" className="text-xs text-muted-foreground sr-only">
+              Enter an Ethereum wallet address starting with 0x
+            </p>
             {errors.walletAddress && touched.walletAddress && (
-              <p className="text-sm text-destructive flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
+              <p id="wallet-error" className="text-sm text-destructive flex items-center gap-1" role="alert">
+                <AlertCircle className="h-3 w-3" aria-hidden="true" />
                 {errors.walletAddress}
               </p>
             )}
@@ -278,16 +314,23 @@ export function ContractorFormModal({
 
           {/* Rate Amount Field */}
           <div className="space-y-2">
-            <Label htmlFor="rateAmount">Rate Amount</Label>
+            <Label htmlFor="contractor-rate">
+              Rate Amount
+              <span className="text-destructive ml-1" aria-hidden="true">*</span>
+              <span className="sr-only">(required)</span>
+            </Label>
             <div className="flex gap-2">
               <Input
-                id="rateAmount"
+                id="contractor-rate"
                 type="text"
                 inputMode="decimal"
                 value={rateAmount}
                 onChange={(e) => handleChange("rateAmount", e.target.value)}
                 onBlur={() => handleBlur("rateAmount")}
                 placeholder="1000.00"
+                aria-required="true"
+                aria-invalid={!!(errors.rateAmount && touched.rateAmount)}
+                aria-describedby={errors.rateAmount && touched.rateAmount ? "rate-error" : undefined}
                 className={errors.rateAmount && touched.rateAmount ? "border-destructive flex-1" : "flex-1"}
               />
               <Select
@@ -295,11 +338,12 @@ export function ContractorFormModal({
                 onChange={(e) => setRateCurrency(e.target.value)}
                 options={CURRENCY_OPTIONS}
                 className="w-24"
+                aria-label="Currency"
               />
             </div>
             {errors.rateAmount && touched.rateAmount && (
-              <p className="text-sm text-destructive flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
+              <p id="rate-error" className="text-sm text-destructive flex items-center gap-1" role="alert">
+                <AlertCircle className="h-3 w-3" aria-hidden="true" />
                 {errors.rateAmount}
               </p>
             )}
@@ -307,20 +351,21 @@ export function ContractorFormModal({
 
           {/* Pay Cycle Field */}
           <div className="space-y-2">
-            <Label htmlFor="payCycle">Pay Cycle</Label>
+            <Label htmlFor="contractor-paycycle">Pay Cycle</Label>
             <Select
-              id="payCycle"
+              id="contractor-paycycle"
               value={payCycle}
               onChange={(e) => setPayCycle(e.target.value as PayCycle)}
               options={PAY_CYCLE_OPTIONS}
+              aria-label="Pay cycle frequency"
             />
           </div>
 
           {/* API Error */}
           {error && (
-            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg" role="alert" aria-live="polite">
               <p className="text-sm text-destructive flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" />
+                <AlertCircle className="h-4 w-4" aria-hidden="true" />
                 {error.message || "An error occurred. Please try again."}
               </p>
             </div>
@@ -335,8 +380,8 @@ export function ContractorFormModal({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            <Button type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
+              {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />}
               {isEditing ? "Save Changes" : "Add Contractor"}
             </Button>
           </DialogFooter>

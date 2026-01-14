@@ -4,6 +4,7 @@
 
 import type { Express, Request, Response } from 'express';
 import { db } from '../lib/db.js';
+import { withRpcLogging } from '../lib/blockchain-logger.js';
 import authRoutes from './auth.routes.js';
 import orgRoutes from './org.routes.js';
 import contractorRoutes from './contractor.routes.js';
@@ -13,8 +14,76 @@ import notificationRoutes from './notification.routes.js';
 
 export function setupRoutes(app: Express): void {
   // Health check endpoints
-  app.get('/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  app.get('/health', async (_req: Request, res: Response) => {
+    const checks: Record<string, { status: string; latency?: number; error?: string }> = {};
+    
+    // Check database connectivity
+    const dbStart = Date.now();
+    try {
+      await db.$queryRaw`SELECT 1`;
+      checks.database = { status: 'ok', latency: Date.now() - dbStart };
+    } catch (error) {
+      checks.database = { 
+        status: 'error', 
+        latency: Date.now() - dbStart,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+
+    // Check RPC connectivity (optional - only if RPC_URL is configured)
+    const rpcUrl = process.env.RPC_URL;
+    if (rpcUrl) {
+      const rpcStart = Date.now();
+      try {
+        // Use withRpcLogging for structured logging of RPC health check
+        await withRpcLogging(
+          'eth_blockNumber',
+          async () => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
+            const response = await fetch(rpcUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'eth_blockNumber',
+                params: [],
+                id: 1,
+              }),
+              signal: controller.signal,
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            
+            return response.json();
+          },
+          { healthCheck: true },
+          { correlationId: 'health-check' }
+        );
+        
+        checks.rpc = { status: 'ok', latency: Date.now() - rpcStart };
+      } catch (error) {
+        checks.rpc = { 
+          status: 'error', 
+          latency: Date.now() - rpcStart,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+
+    const healthy = Object.values(checks).every(c => c.status === 'ok');
+    
+    res.status(healthy ? 200 : 503).json({
+      status: healthy ? 'healthy' : 'unhealthy',
+      components: checks,
+      timestamp: new Date().toISOString(),
+      version: process.env.npm_package_version || '1.0.0',
+    });
   });
 
   app.get('/ready', async (_req: Request, res: Response) => {

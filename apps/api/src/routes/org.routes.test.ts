@@ -59,15 +59,21 @@ describe('Organization Routes', () => {
   beforeAll(async () => {
     app = createTestApp();
 
-    // Create test users
-    ownerUser = await db.user.create({
-      data: { walletAddress: '0x' + '1'.repeat(40) },
+    // Create test users using upsert to handle existing records
+    ownerUser = await db.user.upsert({
+      where: { walletAddress: '0x' + '1'.repeat(40) },
+      update: {},
+      create: { walletAddress: '0x' + '1'.repeat(40) },
     });
-    memberUser = await db.user.create({
-      data: { walletAddress: '0x' + '2'.repeat(40) },
+    memberUser = await db.user.upsert({
+      where: { walletAddress: '0x' + '2'.repeat(40) },
+      update: {},
+      create: { walletAddress: '0x' + '2'.repeat(40) },
     });
-    nonMemberUser = await db.user.create({
-      data: { walletAddress: '0x' + '3'.repeat(40) },
+    nonMemberUser = await db.user.upsert({
+      where: { walletAddress: '0x' + '3'.repeat(40) },
+      update: {},
+      create: { walletAddress: '0x' + '3'.repeat(40) },
     });
 
     // Generate tokens

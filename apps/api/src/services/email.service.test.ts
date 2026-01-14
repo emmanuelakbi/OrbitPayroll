@@ -99,7 +99,7 @@ describe('EmailService', () => {
   });
 
   describe('sendAsync', () => {
-    it('should not throw when called', async () => {
+    it('should not throw when called', () => {
       const params: SendEmailParams = {
         to: 'test@example.com',
         template: 'payroll_scheduled',
@@ -111,8 +111,8 @@ describe('EmailService', () => {
         } as PayrollScheduledData,
       };
 
-      // sendAsync should not throw
-      await expect(sendEmailAsync(params)).resolves.toBeUndefined();
+      // sendAsync is synchronous (fire-and-forget), should not throw
+      expect(() => sendEmailAsync(params)).not.toThrow();
     });
   });
 

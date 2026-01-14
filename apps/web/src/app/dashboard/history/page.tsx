@@ -118,9 +118,9 @@ export default function PayrollHistoryPage() {
   return (
     <div>
       {/* Page Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Payroll History</h1>
-        <p className="text-muted-foreground">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-2">Payroll History</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
           View and export past payroll runs
         </p>
       </div>

@@ -2,11 +2,17 @@
  * Payroll Service
  *
  * Handles payroll preview, run creation, and history retrieval.
+ * Manages batch cryptocurrency payments to contractors via smart contracts.
+ *
+ * @module services/payroll
+ * @see Requirements: Batch payroll execution via smart contracts
  */
 
 import { db } from '../lib/db.js';
 import { OrgError, PayrollError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import { blockchainLogger } from '../lib/blockchain-logger.js';
+import { auditLogger } from '../lib/audit-logger.js';
 import { isMember } from './org.service.js';
 import { Decimal } from '@prisma/client/runtime/library';
 import type { PayrollStatus, ItemStatus } from '@orbitpayroll/database';
@@ -15,6 +21,9 @@ import type { PayrollStatus, ItemStatus } from '@orbitpayroll/database';
 // Response Types
 // ============================================
 
+/**
+ * Contractor data for payroll preview
+ */
 export interface PayrollPreviewContractor {
   id: string;
   name: string;
@@ -22,6 +31,9 @@ export interface PayrollPreviewContractor {
   amount: string;
 }
 
+/**
+ * Payroll preview response with treasury balance check
+ */
 export interface PayrollPreviewResponse {
   contractors: PayrollPreviewContractor[];
   totalMnee: string;
@@ -30,6 +42,9 @@ export interface PayrollPreviewResponse {
   deficit: string;
 }
 
+/**
+ * Payroll run summary response
+ */
 export interface PayrollRunResponse {
   id: string;
   orgId: string;
@@ -42,6 +57,9 @@ export interface PayrollRunResponse {
   createdAt: string;
 }
 
+/**
+ * Individual payroll item response
+ */
 export interface PayrollItemResponse {
   id: string;
   contractorId: string | null;
@@ -51,10 +69,17 @@ export interface PayrollItemResponse {
   status: ItemStatus;
 }
 
+/**
+ * Detailed payroll run response including all items
+ */
 export interface PayrollRunDetailResponse extends PayrollRunResponse {
   items: PayrollItemResponse[];
 }
 
+/**
+ * Generic paginated response wrapper
+ * @typeParam T - The type of items in the data array
+ */
 export interface PaginatedResponse<T> {
   data: T[];
   meta: {
@@ -69,6 +94,9 @@ export interface PaginatedResponse<T> {
 // Input Types
 // ============================================
 
+/**
+ * Data required to create a new payroll run
+ */
 export interface CreatePayrollRunData {
   txHash: string;
   items: Array<{
@@ -78,6 +106,9 @@ export interface CreatePayrollRunData {
   runLabel?: string | undefined;
 }
 
+/**
+ * Parameters for listing payroll runs with pagination
+ */
 export interface ListPayrollRunsParams {
   page: number;
   limit: number;
@@ -88,8 +119,13 @@ export interface ListPayrollRunsParams {
 // ============================================
 
 /**
- * Generate a payroll preview for an organization
- * Calculates total MNEE from active contractors
+ * Generate a payroll preview for an organization.
+ * Calculates total MNEE from active contractors and checks treasury balance.
+ *
+ * @param orgId - The organization ID
+ * @param userId - The ID of the user requesting the preview
+ * @returns Payroll preview with contractors, totals, and treasury status
+ * @throws {OrgError} If organization not found or user is not a member
  */
 export async function previewPayroll(
   orgId: string,
@@ -138,6 +174,18 @@ export async function previewPayroll(
     ? totalMnee.minus(treasuryBalance)
     : new Decimal(0);
 
+  // Audit log: payroll previewed (Requirement 5.4)
+  await auditLogger.payrollPreviewed(
+    {
+      totalMnee: totalMnee.toString(),
+      contractorCount: previewContractors.length,
+    },
+    {
+      userId,
+      orgId,
+    }
+  );
+
   return {
     contractors: previewContractors,
     totalMnee: totalMnee.toString(),
@@ -149,8 +197,14 @@ export async function previewPayroll(
 
 
 /**
- * Create a new payroll run
- * Records the transaction hash and creates payroll items
+ * Create a new payroll run.
+ * Records the transaction hash and creates payroll items for each contractor.
+ *
+ * @param orgId - The organization ID
+ * @param userId - The ID of the user creating the payroll run
+ * @param data - The payroll run data including transaction hash and items
+ * @returns The created payroll run
+ * @throws {OrgError} If organization not found or user is not a member
  */
 export async function createPayrollRun(
   orgId: string,
@@ -210,11 +264,37 @@ export async function createPayrollRun(
     'Payroll run created'
   );
 
+  // Log transaction submission for blockchain tracking (Requirements: 4.3)
+  blockchainLogger.txSubmission({
+    txHash: data.txHash,
+    orgId,
+  }, `Payroll transaction recorded: ${data.txHash}`);
+
+  // Audit log: payroll executed (Requirement 5.4)
+  await auditLogger.payrollExecuted(
+    {
+      payrollRunId: payrollRun.id,
+      txHash: data.txHash,
+      totalMnee: totalMnee.toString(),
+      contractorCount: data.items.length,
+    },
+    {
+      userId,
+      orgId,
+    }
+  );
+
   return formatPayrollRunResponse(payrollRun, data.items.length);
 }
 
 /**
- * List payroll runs for an organization with pagination
+ * List payroll runs for an organization with pagination.
+ *
+ * @param orgId - The organization ID
+ * @param userId - The ID of the user requesting the list
+ * @param params - Pagination parameters
+ * @returns Paginated list of payroll runs
+ * @throws {OrgError} If organization not found or user is not a member
  */
 export async function listPayrollRuns(
   orgId: string,
@@ -267,7 +347,14 @@ export async function listPayrollRuns(
 }
 
 /**
- * Get a single payroll run with items
+ * Get a single payroll run with all items.
+ *
+ * @param orgId - The organization ID
+ * @param runId - The payroll run ID
+ * @param userId - The ID of the user requesting the details
+ * @returns Detailed payroll run with all payment items
+ * @throws {OrgError} If organization not found or user is not a member
+ * @throws {PayrollError} If payroll run not found
  */
 export async function getPayrollRun(
   orgId: string,

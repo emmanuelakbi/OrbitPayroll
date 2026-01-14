@@ -23,7 +23,7 @@ export const ADDRESSES = {
   },
   sepolia: {
     MNEE: '0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF' as const, // Same address on testnet
-    PayrollTreasury: undefined as string | undefined, // To be set after sepolia deployment
+    PayrollTreasury: '0xA6f85Ad3CC0E251624F066052172e76e6edF2380' as const, // Deployed to Sepolia
   },
   localhost: {
     MNEE: '0x5FbDB2315678afecb367f032d93F642f64180aa3' as const, // Local hardhat deployment

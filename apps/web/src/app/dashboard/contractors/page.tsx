@@ -58,6 +58,8 @@ export default function ContractorsPage() {
         search: debouncedSearch || undefined,
       }),
     enabled: !!currentOrg?.id,
+    staleTime: 30 * 1000, // 30 seconds - contractors don't change frequently
+    gcTime: 5 * 60 * 1000, // 5 minutes cache
   });
 
   // Create contractor mutation
@@ -131,16 +133,16 @@ export default function ContractorsPage() {
   return (
     <div>
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Contractors</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold">Contractors</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
             Manage your organization&apos;s contractors
           </p>
         </div>
         {canManage && (
-          <Button onClick={handleAddContractor}>
-            <Plus className="h-4 w-4 mr-2" />
+          <Button onClick={handleAddContractor} className="w-full sm:w-auto">
+            <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
             Add Contractor
           </Button>
         )}

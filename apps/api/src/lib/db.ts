@@ -12,14 +12,37 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+// Slow query threshold in milliseconds
+const SLOW_QUERY_THRESHOLD = 100;
+
 export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
     log:
       process.env.NODE_ENV === 'development'
-        ? ['query', 'error', 'warn']
-        : ['error'],
+        ? [
+            { emit: 'event', level: 'query' },
+            { emit: 'stdout', level: 'error' },
+            { emit: 'stdout', level: 'warn' },
+          ]
+        : [{ emit: 'stdout', level: 'error' }],
   });
+
+// Log slow queries for optimization
+if (process.env.NODE_ENV === 'development') {
+  db.$on('query' as never, (e: { query: string; duration: number; params: string }) => {
+    if (e.duration > SLOW_QUERY_THRESHOLD) {
+      logger.warn(
+        {
+          query: e.query,
+          duration: e.duration,
+          params: e.params,
+        },
+        `Slow query detected (${e.duration}ms)`
+      );
+    }
+  });
+}
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = db;

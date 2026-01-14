@@ -2,15 +2,23 @@
  * Contractor Service
  *
  * Handles contractor CRUD operations within organizations.
+ * Contractors are recipients of payroll payments with defined rates and pay cycles.
+ *
+ * @module services/contractor
+ * @see Requirements: Contractor management with configurable pay cycles
  */
 
 import { db } from '../lib/db.js';
 import { ContractorError, OrgError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import { auditLogger } from '../lib/audit-logger.js';
 import { verifyRole, isMember } from './org.service.js';
 import type { PayCycle } from '@orbitpayroll/database';
 import { Decimal } from '@prisma/client/runtime/library';
 
+/**
+ * Response type for contractor data
+ */
 export interface ContractorResponse {
   id: string;
   orgId: string;
@@ -24,6 +32,10 @@ export interface ContractorResponse {
   updatedAt: string;
 }
 
+/**
+ * Generic paginated response wrapper
+ * @typeParam T - The type of items in the data array
+ */
 export interface PaginatedResponse<T> {
   data: T[];
   meta: {
@@ -34,6 +46,9 @@ export interface PaginatedResponse<T> {
   };
 }
 
+/**
+ * Data required to create a new contractor
+ */
 export interface CreateContractorData {
   name: string;
   walletAddress: string;
@@ -42,6 +57,9 @@ export interface CreateContractorData {
   payCycle: PayCycle;
 }
 
+/**
+ * Data for updating an existing contractor (all fields optional)
+ */
 export interface UpdateContractorData {
   name?: string | undefined;
   walletAddress?: string | undefined;
@@ -50,6 +68,9 @@ export interface UpdateContractorData {
   payCycle?: PayCycle | undefined;
 }
 
+/**
+ * Parameters for listing contractors with pagination and filtering
+ */
 export interface ListContractorsParams {
   page: number;
   limit: number;
@@ -59,8 +80,15 @@ export interface ListContractorsParams {
 
 
 /**
- * Create a new contractor in an organization
- * Any member can create contractors
+ * Create a new contractor in an organization.
+ * Any organization member can create contractors.
+ *
+ * @param orgId - The organization ID
+ * @param userId - The ID of the user creating the contractor
+ * @param data - The contractor data
+ * @returns The created contractor
+ * @throws {OrgError} If organization not found or user is not a member
+ * @throws {ContractorError} If wallet address already exists in the organization
  */
 export async function createContractor(
   orgId: string,
@@ -109,11 +137,30 @@ export async function createContractor(
 
   logger.info({ orgId, contractorId: contractor.id }, 'Contractor created');
 
+  // Audit log: contractor created (Requirement 5.3)
+  await auditLogger.contractorCreated(
+    {
+      contractorId: contractor.id,
+      contractorName: contractor.name,
+      walletAddress: contractor.walletAddress,
+    },
+    {
+      userId,
+      orgId,
+    }
+  );
+
   return formatContractorResponse(contractor);
 }
 
 /**
- * List contractors in an organization with pagination, search, and filtering
+ * List contractors in an organization with pagination, search, and filtering.
+ *
+ * @param orgId - The organization ID
+ * @param userId - The ID of the user requesting the list
+ * @param params - Pagination and filter parameters
+ * @returns Paginated list of contractors
+ * @throws {OrgError} If organization not found or user is not a member
  */
 export async function listContractors(
   orgId: string,
@@ -180,7 +227,14 @@ export async function listContractors(
 
 
 /**
- * Get a single contractor by ID
+ * Get a single contractor by ID.
+ *
+ * @param orgId - The organization ID
+ * @param contractorId - The contractor ID
+ * @param userId - The ID of the user requesting the contractor
+ * @returns The contractor data
+ * @throws {OrgError} If organization not found or user is not a member
+ * @throws {ContractorError} If contractor not found
  */
 export async function getContractor(
   orgId: string,
@@ -218,8 +272,16 @@ export async function getContractor(
 }
 
 /**
- * Update a contractor
- * Requires OWNER_ADMIN role
+ * Update a contractor.
+ * Requires OWNER_ADMIN role.
+ *
+ * @param orgId - The organization ID
+ * @param contractorId - The contractor ID
+ * @param userId - The ID of the user updating the contractor
+ * @param data - The fields to update
+ * @returns The updated contractor
+ * @throws {OrgError} If organization not found or user lacks permission
+ * @throws {ContractorError} If contractor not found or wallet address is duplicate
  */
 export async function updateContractor(
   orgId: string,
@@ -281,12 +343,50 @@ export async function updateContractor(
 
   logger.info({ orgId, contractorId }, 'Contractor updated');
 
+  // Build changes object for audit log
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  if (data.name && data.name !== contractor.name) {
+    changes.name = { from: contractor.name, to: data.name };
+  }
+  if (data.walletAddress && data.walletAddress.toLowerCase() !== contractor.walletAddress) {
+    changes.walletAddress = { from: contractor.walletAddress, to: data.walletAddress.toLowerCase() };
+  }
+  if (data.rateAmount !== undefined && !new Decimal(data.rateAmount).equals(contractor.rateAmount)) {
+    changes.rateAmount = { from: contractor.rateAmount.toString(), to: data.rateAmount.toString() };
+  }
+  if (data.rateCurrency && data.rateCurrency !== contractor.rateCurrency) {
+    changes.rateCurrency = { from: contractor.rateCurrency, to: data.rateCurrency };
+  }
+  if (data.payCycle && data.payCycle !== contractor.payCycle) {
+    changes.payCycle = { from: contractor.payCycle, to: data.payCycle };
+  }
+
+  // Audit log: contractor updated (Requirement 5.3)
+  await auditLogger.contractorUpdated(
+    {
+      contractorId,
+      contractorName: updated.name,
+      walletAddress: updated.walletAddress,
+      changes,
+    },
+    {
+      userId,
+      orgId,
+    }
+  );
+
   return formatContractorResponse(updated);
 }
 
 /**
- * Archive (soft delete) a contractor
- * Requires OWNER_ADMIN role
+ * Archive (soft delete) a contractor.
+ * Requires OWNER_ADMIN role.
+ *
+ * @param orgId - The organization ID
+ * @param contractorId - The contractor ID
+ * @param userId - The ID of the user archiving the contractor
+ * @throws {OrgError} If organization not found or user lacks permission
+ * @throws {ContractorError} If contractor not found
  */
 export async function archiveContractor(
   orgId: string,
@@ -324,6 +424,19 @@ export async function archiveContractor(
   });
 
   logger.info({ orgId, contractorId }, 'Contractor archived');
+
+  // Audit log: contractor archived (Requirement 5.3)
+  await auditLogger.contractorArchived(
+    {
+      contractorId,
+      contractorName: contractor.name,
+      walletAddress: contractor.walletAddress,
+    },
+    {
+      userId,
+      orgId,
+    }
+  );
 }
 
 // ============================================

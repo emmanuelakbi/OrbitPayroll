@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 // MNEE Token address on mainnet/testnet
-const MNEE_TOKEN_ADDRESS = process.env.MNEE_TOKEN_ADDRESS || "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFB6cF";
+const MNEE_TOKEN_ADDRESS = process.env.MNEE_TOKEN_ADDRESS || "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF";
 
 interface DeploymentResult {
   network: string;

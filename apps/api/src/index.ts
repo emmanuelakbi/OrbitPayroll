@@ -1,5 +1,10 @@
 /**
  * OrbitPayroll API Server Entry Point
+ *
+ * This module initializes and starts the Express server with proper
+ * configuration, database connection, and graceful shutdown handling.
+ *
+ * @module index
  */
 
 import 'dotenv/config';
@@ -8,7 +13,13 @@ import { loadApiConfig } from '@orbitpayroll/config';
 import { logger } from './lib/logger.js';
 import { connectDatabase, disconnectDatabase } from './lib/db.js';
 
-async function main() {
+/**
+ * Main entry point for the OrbitPayroll API server.
+ * Initializes configuration, database connection, and starts the HTTP server.
+ *
+ * @returns Promise that resolves when server is started
+ */
+async function main(): Promise<void> {
   try {
     // Load and validate configuration
     const config = loadApiConfig();
@@ -27,13 +38,19 @@ async function main() {
       );
     });
 
-    // Graceful shutdown
-    const shutdown = async (signal: string) => {
+    /**
+     * Handles graceful shutdown of the server.
+     * Closes HTTP connections and disconnects from database.
+     *
+     * @param signal - The signal that triggered shutdown (SIGTERM or SIGINT)
+     */
+    const shutdown = (signal: string): void => {
       logger.info({ signal }, 'Shutdown signal received');
-      server.close(async () => {
-        await disconnectDatabase();
-        logger.info('Server closed');
-        process.exit(0);
+      server.close(() => {
+        void disconnectDatabase().then(() => {
+          logger.info('Server closed');
+          process.exit(0);
+        });
       });
     };
 
@@ -45,4 +62,4 @@ async function main() {
   }
 }
 
-main();
+void main();

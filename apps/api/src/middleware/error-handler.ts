@@ -10,6 +10,14 @@
  *
  * All errors are logged with request context for debugging.
  *
+ * Error Logging Requirements (3.1-3.6):
+ * - 3.1: Log all errors with ERROR level
+ * - 3.2: Include error message, error code, stack trace (in development)
+ * - 3.3: Include request context: path, method, user_id, org_id
+ * - 3.4: NOT include stack traces in production (security)
+ * - 3.5: Include correlation_id for tracing
+ * - 3.6: Sanitize error messages (no sensitive data)
+ *
  * @see Requirements 9.3, 9.4, 9.5, 9.6, 9.7, 9.8
  */
 
@@ -17,6 +25,42 @@ import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { logger } from '../lib/logger.js';
 import { AppError, ErrorCode } from '../lib/errors.js';
+import { getCorrelationId } from './request-logger.js';
+
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+/**
+ * Patterns for sensitive data that should be sanitized from error messages
+ * @see Requirement 3.6: Sanitize error messages
+ */
+const SENSITIVE_PATTERNS = [
+  // Private keys (Ethereum format)
+  /0x[a-fA-F0-9]{64}/g,
+  // JWT tokens
+  /eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*/g,
+  // Bearer tokens
+  /Bearer\s+[a-zA-Z0-9_-]+/gi,
+  // API keys (common formats)
+  /[a-zA-Z0-9_-]{32,}/g,
+  // Email addresses
+  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+  // Password fields in JSON
+  /"password"\s*:\s*"[^"]*"/gi,
+  // Secret fields in JSON
+  /"secret"\s*:\s*"[^"]*"/gi,
+];
+
+/**
+ * Sanitize error message by removing sensitive data
+ * @see Requirement 3.6: Sanitize error messages
+ */
+function sanitizeErrorMessage(message: string): string {
+  let sanitized = message;
+  for (const pattern of SENSITIVE_PATTERNS) {
+    sanitized = sanitized.replace(pattern, '[REDACTED]');
+  }
+  return sanitized;
+}
 
 /**
  * Standard error response format
@@ -27,6 +71,66 @@ interface ErrorResponse {
   message: string;
   details?: Record<string, string[]>;
   correlationId?: string;
+}
+
+/**
+ * Error log context interface
+ * @see Requirements 3.2, 3.3, 3.5
+ */
+interface ErrorLogContext {
+  correlationId: string;
+  errorCode?: string;
+  errorMessage: string;
+  path: string;
+  method: string;
+  userId?: string;
+  orgId?: string;
+  statusCode: number;
+  stack?: string;
+}
+
+/**
+ * Log error with full context
+ * @see Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6
+ */
+function logError(
+  err: Error,
+  req: Request,
+  statusCode: number,
+  errorCode?: string
+): void {
+  // Get correlation ID from request (Requirement 3.5)
+  const correlationId = getCorrelationId(req);
+
+  // Build error log context (Requirements 3.2, 3.3)
+  const logContext: ErrorLogContext = {
+    correlationId,
+    errorCode,
+    errorMessage: sanitizeErrorMessage(err.message),
+    path: req.path,
+    method: req.method,
+    statusCode,
+  };
+
+  // Include user context if available (Requirement 3.3)
+  if (req.user?.id) {
+    logContext.userId = req.user.id;
+  }
+
+  // Include org context if available (Requirement 3.3)
+  // orgId may be in params or body depending on the route
+  const orgId = req.params?.orgId || (req.body as { orgId?: string })?.orgId;
+  if (orgId) {
+    logContext.orgId = orgId;
+  }
+
+  // Include stack trace only in development (Requirements 3.2, 3.4)
+  if (isDevelopment && err.stack) {
+    logContext.stack = err.stack;
+  }
+
+  // Log at ERROR level (Requirement 3.1)
+  logger.error(logContext, `Error: ${sanitizeErrorMessage(err.message)}`);
 }
 
 /**
@@ -91,28 +195,15 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  // Generate correlation ID for tracking
-  // @see Requirement 9.7: Return 500 for unexpected errors with correlation ID
-  const correlationId = crypto.randomUUID();
-
-  // Log error with context
-  // @see Requirement 9.8: Log all errors with request context
-  logger.error(
-    {
-      correlationId,
-      error: err.message,
-      stack: err.stack,
-      path: req.path,
-      method: req.method,
-      ip: req.ip,
-      userId: req.user?.id,
-    },
-    'Request error'
-  );
+  // Get correlation ID from request for tracking (Requirement 3.5)
+  const correlationId = getCorrelationId(req);
 
   // Handle known error types
   // @see Requirements 9.4, 9.5, 9.6: Return appropriate status codes
   if (err instanceof AppError) {
+    // Log AppError with context (Requirements 3.1-3.6)
+    logError(err, req, err.statusCode, err.code);
+
     const response: ErrorResponse = {
       code: err.code,
       message: err.message,
@@ -127,6 +218,9 @@ export function errorHandler(
   // Handle Zod validation errors
   // @see Requirement 9.2: Return 400 with field-level error details
   if (isZodError(err)) {
+    // Log validation error (Requirements 3.1-3.6)
+    logError(err, req, 400, ErrorCode.VALIDATION_ERROR);
+
     const details: Record<string, string[]> = {};
     for (const issue of err.issues) {
       const path = issue.path.length > 0 ? issue.path.join('.') : '_root';
@@ -148,6 +242,9 @@ export function errorHandler(
   // Handle SIWE errors
   // @see Requirement 9.4: Return 401 for invalid authentication
   if (isSiweError(err)) {
+    // Log auth error (Requirements 3.1-3.6)
+    logError(err, req, 401, ErrorCode.AUTH_002);
+
     const response: ErrorResponse = {
       code: ErrorCode.AUTH_002,
       message: 'Invalid signature or wallet address',
@@ -159,13 +256,23 @@ export function errorHandler(
   // Handle Prisma errors
   // @see Requirement 9.6: Return 404 for non-existent resources
   if (isPrismaError(err)) {
-    const response = handlePrismaError(err);
-    res.status(response.status).json(response.body);
+    const prismaResponse = handlePrismaError(err);
+    // Log Prisma error (Requirements 3.1-3.6)
+    logError(
+      new Error(prismaResponse.body.message),
+      req,
+      prismaResponse.status,
+      prismaResponse.body.code
+    );
+    res.status(prismaResponse.status).json(prismaResponse.body);
     return;
   }
 
   // Handle unknown errors
   // @see Requirement 9.7: Return 500 for unexpected errors with correlation ID
+  // Log unknown error (Requirements 3.1-3.6)
+  logError(err, req, 500, ErrorCode.INTERNAL_ERROR);
+
   const response: ErrorResponse = {
     code: ErrorCode.INTERNAL_ERROR,
     message: 'An unexpected error occurred',

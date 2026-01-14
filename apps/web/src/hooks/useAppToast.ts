@@ -1,10 +1,11 @@
 import { useToast, type ToastType } from "@/components/ui/toast";
-import { getErrorMessage } from "@/lib/error-messages";
+import { getErrorMessage, isRetryableError } from "@/lib/error-messages";
 import type { ApiError } from "@/lib/api/types";
 
 /**
  * Custom hook that provides toast notifications with error message mapping.
  * Automatically converts API errors to human-readable messages.
+ * Follows Requirements 3.1, 3.2, 3.3 for user-friendly error handling.
  */
 export function useAppToast() {
   const { addToast, removeToast, clearToasts } = useToast();
@@ -32,10 +33,12 @@ export function useAppToast() {
 
   /**
    * Show an error toast with automatic message mapping
+   * Follows Requirement 3.1, 3.2 for user-friendly error messages with recovery actions.
    */
   const error = (
     errorOrTitle: ApiError | Error | unknown | string,
-    message?: string
+    message?: string,
+    onAction?: () => void
   ) => {
     // If it's a string, use it directly as title
     if (typeof errorOrTitle === "string") {
@@ -48,13 +51,10 @@ export function useAppToast() {
       type: "error",
       title: errorMessage.title,
       message: errorMessage.description,
-      action: errorMessage.action
+      action: errorMessage.action && onAction
         ? {
             label: errorMessage.action,
-            onClick: () => {
-              // Action handling can be customized per use case
-              // For now, just dismiss the toast
-            },
+            onClick: onAction,
           }
         : undefined,
     });
@@ -79,7 +79,8 @@ export function useAppToast() {
   };
 
   /**
-   * Show an error toast with a retry action
+   * Show an error toast with automatic retry action for retryable errors
+   * Follows Requirement 3.3 for retry on transient failures.
    */
   const errorWithRetry = (
     errorOrTitle: ApiError | Error | unknown | string,
@@ -87,14 +88,18 @@ export function useAppToast() {
   ) => {
     const errorMessage =
       typeof errorOrTitle === "string"
-        ? { title: errorOrTitle, description: "" }
+        ? { title: errorOrTitle, description: "", action: "Try Again" }
         : getErrorMessage(errorOrTitle);
+
+    // Determine if error is retryable
+    const retryable = typeof errorOrTitle !== "string" && isRetryableError(errorOrTitle);
+    const actionLabel = retryable ? (errorMessage.action || "Try Again") : errorMessage.action;
 
     return addToast({
       type: "error",
       title: errorMessage.title,
       message: errorMessage.description,
-      action: { label: "Try Again", onClick: onRetry },
+      action: actionLabel ? { label: actionLabel, onClick: onRetry } : undefined,
     });
   };
 
@@ -115,12 +120,15 @@ export function useAppToast() {
         title: "Transaction Successful",
         message,
       }),
-    error: (error: unknown) => {
+    error: (error: unknown, onRetry?: () => void) => {
       const errorMessage = getErrorMessage(error);
       return addToast({
         type: "error",
         title: errorMessage.title,
         message: errorMessage.description,
+        action: errorMessage.action && onRetry
+          ? { label: errorMessage.action, onClick: onRetry }
+          : undefined,
       });
     },
   };

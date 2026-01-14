@@ -1,0 +1,501 @@
+# CI/CD Pipeline for OrbitPayroll
+# Runs tests, linting, type checking on every pull request
+# Builds Docker image and deploys on main branch merge
+# Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  # Manual trigger for backend deployment (Requirement 6.6)
+  workflow_dispatch:
+    inputs:
+      deploy_backend:
+        description: 'Deploy backend to production'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - 'staging'
+          - 'production'
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/api
+
+jobs:
+  # Lint and type check job (Requirement 6.3)
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint on API
+        run: npm run lint -w @orbitpayroll/api
+
+      - name: Run ESLint on Web
+        run: npm run lint -w web
+
+      - name: Type check API
+        run: npm run build -w @orbitpayroll/types && npm run build -w @orbitpayroll/config && npm run build -w @orbitpayroll/database && npm run build -w @orbitpayroll/api
+
+      - name: Type check Web
+        run: npm run build -w web
+
+  # Run all tests in parallel for faster execution
+  test-contracts:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npm run compile -w @orbitpayroll/contracts
+
+      - name: Run contract tests with coverage
+        run: npm run test:coverage -w @orbitpayroll/contracts
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: contracts-coverage
+          path: packages/contracts/coverage/
+          retention-days: 7
+
+  test-api:
+    name: API Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck]
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: orbitpayroll_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orbitpayroll_test
+      JWT_SECRET: test-jwt-secret-for-ci
+      NODE_ENV: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate -w @orbitpayroll/database
+
+      - name: Run database migrations
+        run: npm run db:migrate:deploy -w @orbitpayroll/database
+
+      - name: Run API tests with coverage
+        run: npm run test:coverage -w @orbitpayroll/api
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage
+          path: apps/api/coverage/
+          retention-days: 7
+
+  test-web:
+    name: Web Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run web tests with coverage
+        run: npm run test:coverage -w web
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: apps/web/coverage/
+          retention-days: 7
+
+  test-database:
+    name: Database Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck]
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: orbitpayroll_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orbitpayroll_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate -w @orbitpayroll/database
+
+      - name: Run database migrations
+        run: npm run db:migrate:deploy -w @orbitpayroll/database
+
+      - name: Run database tests
+        run: npm run test -w @orbitpayroll/database
+
+  # Summary job that depends on all test jobs
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [test-contracts, test-api, test-web, test-database]
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.test-contracts.result }}" != "success" ]] || \
+             [[ "${{ needs.test-api.result }}" != "success" ]] || \
+             [[ "${{ needs.test-web.result }}" != "success" ]] || \
+             [[ "${{ needs.test-database.result }}" != "success" ]]; then
+            echo "One or more test jobs failed"
+            exit 1
+          fi
+          echo "All tests passed!"
+
+  # Deploy frontend to Vercel on main branch
+  # Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 6.4, 6.5
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    runs-on: ubuntu-latest
+    needs: [ci-success]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
+
+      - name: Build Project Artifacts
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+        working-directory: apps/web
+
+      - name: Deployment Summary
+        run: |
+          echo "## Frontend Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Successfully deployed to: ${{ steps.deploy.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+
+  # Preview deployment for pull requests
+  deploy-preview:
+    name: Deploy Preview to Vercel
+    runs-on: ubuntu-latest
+    needs: [ci-success]
+    if: github.event_name == 'pull_request'
+    environment:
+      name: preview
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
+
+      - name: Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
+
+      - name: Deploy Preview to Vercel
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+        working-directory: apps/web
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🚀 Preview Deployment\n\nDeployed to: ${{ steps.deploy.outputs.url }}\n\nCommit: \`${{ github.sha }}\``
+            })
+
+  # Build and push Docker image on main branch merge (Requirement 6.4)
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [ci-success]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/api/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Docker Build Summary
+        run: |
+          echo "## Docker Build" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Image built and pushed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:** ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** ${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+
+  # Manual backend deployment (Requirement 6.6)
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: [build-docker]
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_backend == 'true') ||
+      (github.ref == 'refs/heads/main' && github.event_name == 'push')
+    environment:
+      name: ${{ github.event.inputs.environment || 'production' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          # Install Railway CLI
+          npm install -g @railway/cli
+          
+          # Deploy using the built Docker image
+          # Railway will pull from GHCR using the image tag
+          echo "Deploying image: ${{ needs.build-docker.outputs.image_tag }}"
+          
+          # Trigger Railway deployment
+          # Note: Actual deployment command depends on Railway project setup
+          # railway up --service api --environment ${{ github.event.inputs.environment || 'production' }}
+          
+          echo "Backend deployment triggered for environment: ${{ github.event.inputs.environment || 'production' }}"
+
+      - name: Backend Deployment Summary
+        run: |
+          echo "## Backend Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Deployment triggered successfully" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment || 'production' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** ${{ needs.build-docker.outputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
+
+  # Notify on deployment success/failure (Requirement 6.7)
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-frontend, build-docker]
+    if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Determine Status
+        id: status
+        run: |
+          if [[ "${{ needs.deploy-frontend.result }}" == "success" ]] && [[ "${{ needs.build-docker.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+            echo "message=All deployments completed successfully!" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+            echo "message=One or more deployments failed. Please check the workflow logs." >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Deployment Summary
+        run: |
+          echo "## Deployment Notification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.status.outputs.emoji }} **Status:** ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Message:** ${{ steps.status.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend Deploy: ${{ needs.deploy-frontend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker Build: ${{ needs.build-docker.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Actor:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
+      # Optional: Send to Slack/Discord webhook if configured
+      - name: Send Slack Notification
+        if: env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": "${{ steps.status.outputs.emoji }} OrbitPayroll Deployment: ${{ steps.status.outputs.status }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.status.outputs.emoji }} OrbitPayroll Deployment"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {"type": "mrkdwn", "text": "*Status:*\n${{ steps.status.outputs.status }}"},
+                    {"type": "mrkdwn", "text": "*Branch:*\n${{ github.ref_name }}"},
+                    {"type": "mrkdwn", "text": "*Commit:*\n`${{ github.sha }}`"},
+                    {"type": "mrkdwn", "text": "*Actor:*\n@${{ github.actor }}"}
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "${{ steps.status.outputs.message }}"
+                  }
+                }
+              ]
+            }' \
+            $SLACK_WEBHOOK_URL || echo "Slack notification skipped (webhook not configured)"

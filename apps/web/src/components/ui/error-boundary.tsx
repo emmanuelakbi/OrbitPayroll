@@ -63,30 +63,58 @@ interface ErrorFallbackProps {
   description?: string;
 }
 
+/**
+ * Accessible Error Fallback component.
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Uses role="alert" for error announcements
+ * - Provides clear error message and recovery action
+ * - Focus management for retry button
+ * 
+ * Validates: Requirements 7.1, 7.3
+ */
 export function ErrorFallback({
   error,
   onReset,
   title = "Something went wrong",
   description = "An unexpected error occurred. Please try again.",
 }: ErrorFallbackProps) {
+  const retryButtonRef = React.useRef<HTMLButtonElement>(null);
+
+  // Focus retry button when error is displayed
+  React.useEffect(() => {
+    if (onReset) {
+      retryButtonRef.current?.focus();
+    }
+  }, [onReset]);
+
   return (
-    <Card className="border-destructive/50">
+    <Card className="border-destructive/50" role="alert" aria-live="assertive">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <AlertCircle className="h-5 w-5 text-destructive" />
+          <AlertCircle className="h-5 w-5 text-destructive" aria-hidden="true" />
           <CardTitle className="text-lg">{title}</CardTitle>
         </div>
       </CardHeader>
       <CardContent>
         <p className="text-muted-foreground mb-4">{description}</p>
         {error && process.env.NODE_ENV === "development" && (
-          <pre className="text-xs bg-muted p-2 rounded mb-4 overflow-auto max-h-32">
+          <pre 
+            className="text-xs bg-muted p-2 rounded mb-4 overflow-auto max-h-32"
+            aria-label="Error details"
+          >
             {error.message}
           </pre>
         )}
         {onReset && (
-          <Button onClick={onReset} variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
+          <Button 
+            ref={retryButtonRef}
+            onClick={onReset} 
+            variant="outline" 
+            size="sm"
+            aria-label="Try again to reload the content"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
             Try Again
           </Button>
         )}

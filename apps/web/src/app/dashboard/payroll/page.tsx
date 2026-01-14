@@ -96,30 +96,32 @@ function PayrollPageContent() {
 
   return (
     <div>
-      {/* Page Header */}
-      <div className="flex items-center justify-between mb-8">
+      {/* Page Header - Responsive layout */}
+      <div className="flex flex-col gap-4 mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Run Payroll</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Run Payroll</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
             Review and execute payroll for your contractors
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Button
             variant="outline"
-            size="sm"
+            size="default"
             onClick={() => refetchPreview()}
             disabled={isLoading}
+            className="w-full sm:w-auto"
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
             Refresh
           </Button>
           <Button
             onClick={handleOpenConfirmModal}
             disabled={!canExecute}
-            size="lg"
+            size="default"
+            className="w-full sm:w-auto"
           >
-            <Play className="h-4 w-4 mr-2" />
+            <Play className="h-4 w-4 mr-2" aria-hidden="true" />
             Execute Payroll
           </Button>
         </div>

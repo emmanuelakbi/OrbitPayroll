@@ -1,15 +1,19 @@
 /**
- * Payroll Service Property Tests
+ * Payroll Service Tests
+ *
+ * Unit tests for preview calculation and run creation.
+ * **Feature: 09-testing, Task 2.3: Payroll Service Tests**
+ * **Validates: Requirements 2.3**
  *
  * Property-based tests for payroll preview calculation.
  * **Feature: 03-backend, Property 8: Payroll Preview Calculation**
  * **Validates: Requirements 5.1, 5.2, 5.3**
  */
 
-import { describe, it, beforeAll, afterAll, expect } from 'vitest';
+import { describe, it, beforeAll, afterAll, beforeEach, expect } from 'vitest';
 import fc from 'fast-check';
 import { db } from '../lib/db.js';
-import { previewPayroll } from './payroll.service.js';
+import { previewPayroll, createPayrollRun, listPayrollRuns, getPayrollRun } from './payroll.service.js';
 import { Decimal } from '@prisma/client/runtime/library';
 import type { PayCycle } from '@orbitpayroll/database';
 
@@ -430,4 +434,571 @@ describe('Property 8: Payroll Preview Calculation', () => {
       { numRuns: 50 }
     );
   }, 120000);
+});
+
+// =============================================================================
+// Unit Tests for Preview Calculation
+// =============================================================================
+describe('Unit Tests: Payroll Preview Calculation', () => {
+  const PREVIEW_PREFIX = 'preview_unit_';
+  const PREVIEW_USER_WALLET = '0x' + PREVIEW_PREFIX + 'a'.repeat(40 - PREVIEW_PREFIX.length);
+  const PREVIEW_TREASURY_WALLET = '0x' + PREVIEW_PREFIX + 'b'.repeat(40 - PREVIEW_PREFIX.length);
+  
+  let previewUserId: string;
+  let previewOrgId: string;
+
+  beforeAll(async () => {
+    // Clean up any existing test data
+    const existingUser = await db.user.findUnique({
+      where: { walletAddress: PREVIEW_USER_WALLET },
+    });
+
+    if (existingUser) {
+      await db.payrollItem.deleteMany({
+        where: { payrollRun: { org: { ownerId: existingUser.id } } },
+      });
+      await db.payrollRun.deleteMany({
+        where: { org: { ownerId: existingUser.id } },
+      });
+      await db.contractor.deleteMany({
+        where: { org: { ownerId: existingUser.id } },
+      });
+      await db.orgMember.deleteMany({
+        where: { userId: existingUser.id },
+      });
+      await db.organization.deleteMany({
+        where: { ownerId: existingUser.id },
+      });
+      await db.user.delete({
+        where: { id: existingUser.id },
+      });
+    }
+
+    // Create test user
+    const testUser = await db.user.create({
+      data: { walletAddress: PREVIEW_USER_WALLET },
+    });
+    previewUserId = testUser.id;
+
+    // Create test organization
+    const testOrg = await db.organization.create({
+      data: {
+        name: 'Preview Unit Test Org',
+        treasuryAddress: PREVIEW_TREASURY_WALLET,
+        ownerId: previewUserId,
+        members: {
+          create: {
+            userId: previewUserId,
+            role: 'OWNER_ADMIN',
+          },
+        },
+      },
+    });
+    previewOrgId = testOrg.id;
+  });
+
+  afterAll(async () => {
+    try {
+      await db.payrollItem.deleteMany({
+        where: { payrollRun: { orgId: previewOrgId } },
+      });
+      await db.payrollRun.deleteMany({ where: { orgId: previewOrgId } });
+      await db.contractor.deleteMany({ where: { orgId: previewOrgId } });
+      await db.orgMember.deleteMany({ where: { orgId: previewOrgId } });
+      await db.organization.deleteMany({ where: { id: previewOrgId } });
+      await db.user.deleteMany({ where: { walletAddress: PREVIEW_USER_WALLET } });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  beforeEach(async () => {
+    await db.contractor.deleteMany({ where: { orgId: previewOrgId } });
+  });
+
+  it('should return preview with correct structure', async () => {
+    // Create a contractor
+    await db.contractor.create({
+      data: {
+        orgId: previewOrgId,
+        name: 'Test Contractor',
+        walletAddress: '0x1234567890123456789012345678901234567890',
+        rateAmount: new Decimal('1000'),
+        rateCurrency: 'MNEE',
+        payCycle: 'MONTHLY',
+        active: true,
+      },
+    });
+
+    const preview = await previewPayroll(previewOrgId, previewUserId);
+
+    expect(preview).toHaveProperty('contractors');
+    expect(preview).toHaveProperty('totalMnee');
+    expect(preview).toHaveProperty('treasuryBalance');
+    expect(preview).toHaveProperty('isSufficient');
+    expect(preview).toHaveProperty('deficit');
+  });
+
+  it('should calculate total from multiple contractors', async () => {
+    // Create multiple contractors
+    await db.contractor.create({
+      data: {
+        orgId: previewOrgId,
+        name: 'Contractor 1',
+        walletAddress: '0x1111111111111111111111111111111111111111',
+        rateAmount: new Decimal('1000'),
+        rateCurrency: 'MNEE',
+        payCycle: 'MONTHLY',
+        active: true,
+      },
+    });
+
+    await db.contractor.create({
+      data: {
+        orgId: previewOrgId,
+        name: 'Contractor 2',
+        walletAddress: '0x2222222222222222222222222222222222222222',
+        rateAmount: new Decimal('2500'),
+        rateCurrency: 'MNEE',
+        payCycle: 'MONTHLY',
+        active: true,
+      },
+    });
+
+    await db.contractor.create({
+      data: {
+        orgId: previewOrgId,
+        name: 'Contractor 3',
+        walletAddress: '0x3333333333333333333333333333333333333333',
+        rateAmount: new Decimal('1500'),
+        rateCurrency: 'MNEE',
+        payCycle: 'MONTHLY',
+        active: true,
+      },
+    });
+
+    const preview = await previewPayroll(previewOrgId, previewUserId);
+
+    expect(preview.contractors).toHaveLength(3);
+    expect(preview.totalMnee).toBe('5000'); // 1000 + 2500 + 1500
+  });
+
+  it('should sort contractors by name', async () => {
+    await db.contractor.create({
+      data: {
+        orgId: previewOrgId,
+        name: 'Charlie',
+        walletAddress: '0x1111111111111111111111111111111111111111',
+        rateAmount: new Decimal('1000'),
+        rateCurrency: 'MNEE',
+        payCycle: 'MONTHLY',
+        active: true,
+      },
+    });
+
+    await db.contractor.create({
+      data: {
+        orgId: previewOrgId,
+        name: 'Alice',
+        walletAddress: '0x2222222222222222222222222222222222222222',
+        rateAmount: new Decimal('2000'),
+        rateCurrency: 'MNEE',
+        payCycle: 'MONTHLY',
+        active: true,
+      },
+    });
+
+    await db.contractor.create({
+      data: {
+        orgId: previewOrgId,
+        name: 'Bob',
+        walletAddress: '0x3333333333333333333333333333333333333333',
+        rateAmount: new Decimal('1500'),
+        rateCurrency: 'MNEE',
+        payCycle: 'MONTHLY',
+        active: true,
+      },
+    });
+
+    const preview = await previewPayroll(previewOrgId, previewUserId);
+
+    expect(preview.contractors[0]?.name).toBe('Alice');
+    expect(preview.contractors[1]?.name).toBe('Bob');
+    expect(preview.contractors[2]?.name).toBe('Charlie');
+  });
+
+  it('should throw error for non-existent organization', async () => {
+    await expect(
+      previewPayroll('non-existent-org-id', previewUserId)
+    ).rejects.toThrow();
+  });
+
+  it('should throw error for non-member user', async () => {
+    // Create a non-member user
+    const nonMemberUser = await db.user.create({
+      data: { walletAddress: '0x' + 'f'.repeat(40) },
+    });
+
+    await expect(
+      previewPayroll(previewOrgId, nonMemberUser.id)
+    ).rejects.toThrow();
+
+    // Cleanup
+    await db.user.delete({ where: { id: nonMemberUser.id } });
+  });
+});
+
+// =============================================================================
+// Unit Tests for Payroll Run Creation
+// =============================================================================
+describe('Unit Tests: Payroll Run Creation', () => {
+  const RUN_PREFIX = 'run_unit_';
+  const RUN_USER_WALLET = '0x' + RUN_PREFIX + 'a'.repeat(40 - RUN_PREFIX.length);
+  const RUN_TREASURY_WALLET = '0x' + RUN_PREFIX + 'b'.repeat(40 - RUN_PREFIX.length);
+  
+  let runUserId: string;
+  let runOrgId: string;
+  let contractorId: string;
+
+  beforeAll(async () => {
+    // Clean up any existing test data
+    const existingUser = await db.user.findUnique({
+      where: { walletAddress: RUN_USER_WALLET },
+    });
+
+    if (existingUser) {
+      await db.payrollItem.deleteMany({
+        where: { payrollRun: { org: { ownerId: existingUser.id } } },
+      });
+      await db.payrollRun.deleteMany({
+        where: { org: { ownerId: existingUser.id } },
+      });
+      await db.contractor.deleteMany({
+        where: { org: { ownerId: existingUser.id } },
+      });
+      await db.orgMember.deleteMany({
+        where: { userId: existingUser.id },
+      });
+      await db.organization.deleteMany({
+        where: { ownerId: existingUser.id },
+      });
+      await db.user.delete({
+        where: { id: existingUser.id },
+      });
+    }
+
+    // Create test user
+    const testUser = await db.user.create({
+      data: { walletAddress: RUN_USER_WALLET },
+    });
+    runUserId = testUser.id;
+
+    // Create test organization
+    const testOrg = await db.organization.create({
+      data: {
+        name: 'Run Unit Test Org',
+        treasuryAddress: RUN_TREASURY_WALLET,
+        ownerId: runUserId,
+        members: {
+          create: {
+            userId: runUserId,
+            role: 'OWNER_ADMIN',
+          },
+        },
+      },
+    });
+    runOrgId = testOrg.id;
+
+    // Create a contractor for payroll runs
+    const contractor = await db.contractor.create({
+      data: {
+        orgId: runOrgId,
+        name: 'Test Contractor',
+        walletAddress: '0x1234567890123456789012345678901234567890',
+        rateAmount: new Decimal('1000'),
+        rateCurrency: 'MNEE',
+        payCycle: 'MONTHLY',
+        active: true,
+      },
+    });
+    contractorId = contractor.id;
+  });
+
+  afterAll(async () => {
+    try {
+      await db.payrollItem.deleteMany({
+        where: { payrollRun: { orgId: runOrgId } },
+      });
+      await db.payrollRun.deleteMany({ where: { orgId: runOrgId } });
+      await db.contractor.deleteMany({ where: { orgId: runOrgId } });
+      await db.orgMember.deleteMany({ where: { orgId: runOrgId } });
+      await db.organization.deleteMany({ where: { id: runOrgId } });
+      await db.user.deleteMany({ where: { walletAddress: RUN_USER_WALLET } });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  beforeEach(async () => {
+    // Clean up payroll runs before each test
+    await db.payrollItem.deleteMany({
+      where: { payrollRun: { orgId: runOrgId } },
+    });
+    await db.payrollRun.deleteMany({ where: { orgId: runOrgId } });
+  });
+
+  it('should create a payroll run with valid data', async () => {
+    const txHash = '0x' + 'a'.repeat(64);
+    const result = await createPayrollRun(runOrgId, runUserId, {
+      txHash,
+      items: [
+        { contractorId, amountMnee: '1000' },
+      ],
+      runLabel: 'January 2026 Payroll',
+    });
+
+    expect(result.id).toBeDefined();
+    expect(result.txHash).toBe(txHash);
+    expect(result.runLabel).toBe('January 2026 Payroll');
+    expect(result.totalMnee).toBe('1000');
+    expect(result.contractorCount).toBe(1);
+    expect(result.status).toBe('EXECUTED');
+    expect(result.executedAt).toBeDefined();
+  });
+
+  it('should calculate total from multiple items', async () => {
+    // Create additional contractors
+    const contractor2 = await db.contractor.create({
+      data: {
+        orgId: runOrgId,
+        name: 'Contractor 2',
+        walletAddress: '0x2222222222222222222222222222222222222222',
+        rateAmount: new Decimal('2000'),
+        rateCurrency: 'MNEE',
+        payCycle: 'MONTHLY',
+        active: true,
+      },
+    });
+
+    const txHash = '0x' + 'b'.repeat(64);
+    const result = await createPayrollRun(runOrgId, runUserId, {
+      txHash,
+      items: [
+        { contractorId, amountMnee: '1000' },
+        { contractorId: contractor2.id, amountMnee: '2500' },
+      ],
+    });
+
+    expect(result.totalMnee).toBe('3500'); // 1000 + 2500
+    expect(result.contractorCount).toBe(2);
+  });
+
+  it('should create payroll run without label', async () => {
+    const txHash = '0x' + 'c'.repeat(64);
+    const result = await createPayrollRun(runOrgId, runUserId, {
+      txHash,
+      items: [
+        { contractorId, amountMnee: '1000' },
+      ],
+    });
+
+    expect(result.runLabel).toBeNull();
+  });
+
+  it('should throw error for non-existent organization', async () => {
+    await expect(
+      createPayrollRun('non-existent-org-id', runUserId, {
+        txHash: '0x' + 'd'.repeat(64),
+        items: [{ contractorId, amountMnee: '1000' }],
+      })
+    ).rejects.toThrow();
+  });
+
+  it('should return ISO date strings for timestamps', async () => {
+    const txHash = '0x' + 'e'.repeat(64);
+    const result = await createPayrollRun(runOrgId, runUserId, {
+      txHash,
+      items: [{ contractorId, amountMnee: '1000' }],
+    });
+
+    expect(new Date(result.createdAt).toISOString()).toBe(result.createdAt);
+    expect(new Date(result.executedAt!).toISOString()).toBe(result.executedAt);
+  });
+});
+
+// =============================================================================
+// Unit Tests for Payroll Run Listing and Retrieval
+// =============================================================================
+describe('Unit Tests: Payroll Run Listing', () => {
+  const LIST_PREFIX = 'list_unit_';
+  const LIST_USER_WALLET = '0x' + LIST_PREFIX + 'a'.repeat(40 - LIST_PREFIX.length);
+  const LIST_TREASURY_WALLET = '0x' + LIST_PREFIX + 'b'.repeat(40 - LIST_PREFIX.length);
+  
+  let listUserId: string;
+  let listOrgId: string;
+  let listContractorId: string;
+
+  beforeAll(async () => {
+    // Clean up any existing test data
+    const existingUser = await db.user.findUnique({
+      where: { walletAddress: LIST_USER_WALLET },
+    });
+
+    if (existingUser) {
+      await db.payrollItem.deleteMany({
+        where: { payrollRun: { org: { ownerId: existingUser.id } } },
+      });
+      await db.payrollRun.deleteMany({
+        where: { org: { ownerId: existingUser.id } },
+      });
+      await db.contractor.deleteMany({
+        where: { org: { ownerId: existingUser.id } },
+      });
+      await db.orgMember.deleteMany({
+        where: { userId: existingUser.id },
+      });
+      await db.organization.deleteMany({
+        where: { ownerId: existingUser.id },
+      });
+      await db.user.delete({
+        where: { id: existingUser.id },
+      });
+    }
+
+    // Create test user
+    const testUser = await db.user.create({
+      data: { walletAddress: LIST_USER_WALLET },
+    });
+    listUserId = testUser.id;
+
+    // Create test organization
+    const testOrg = await db.organization.create({
+      data: {
+        name: 'List Unit Test Org',
+        treasuryAddress: LIST_TREASURY_WALLET,
+        ownerId: listUserId,
+        members: {
+          create: {
+            userId: listUserId,
+            role: 'OWNER_ADMIN',
+          },
+        },
+      },
+    });
+    listOrgId = testOrg.id;
+
+    // Create a contractor
+    const contractor = await db.contractor.create({
+      data: {
+        orgId: listOrgId,
+        name: 'Test Contractor',
+        walletAddress: '0x1234567890123456789012345678901234567890',
+        rateAmount: new Decimal('1000'),
+        rateCurrency: 'MNEE',
+        payCycle: 'MONTHLY',
+        active: true,
+      },
+    });
+    listContractorId = contractor.id;
+  });
+
+  afterAll(async () => {
+    try {
+      await db.payrollItem.deleteMany({
+        where: { payrollRun: { orgId: listOrgId } },
+      });
+      await db.payrollRun.deleteMany({ where: { orgId: listOrgId } });
+      await db.contractor.deleteMany({ where: { orgId: listOrgId } });
+      await db.orgMember.deleteMany({ where: { orgId: listOrgId } });
+      await db.organization.deleteMany({ where: { id: listOrgId } });
+      await db.user.deleteMany({ where: { walletAddress: LIST_USER_WALLET } });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  beforeEach(async () => {
+    await db.payrollItem.deleteMany({
+      where: { payrollRun: { orgId: listOrgId } },
+    });
+    await db.payrollRun.deleteMany({ where: { orgId: listOrgId } });
+  });
+
+  it('should return paginated list of payroll runs', async () => {
+    // Create multiple payroll runs
+    for (let i = 0; i < 5; i++) {
+      await createPayrollRun(listOrgId, listUserId, {
+        txHash: '0x' + i.toString().repeat(64),
+        items: [{ contractorId: listContractorId, amountMnee: (1000 + i * 100).toString() }],
+        runLabel: `Run ${i + 1}`,
+      });
+    }
+
+    const result = await listPayrollRuns(listOrgId, listUserId, {
+      page: 1,
+      limit: 3,
+    });
+
+    expect(result.data).toHaveLength(3);
+    expect(result.meta.page).toBe(1);
+    expect(result.meta.limit).toBe(3);
+    expect(result.meta.total).toBe(5);
+    expect(result.meta.totalPages).toBe(2);
+  });
+
+  it('should return empty list when no payroll runs exist', async () => {
+    const result = await listPayrollRuns(listOrgId, listUserId, {
+      page: 1,
+      limit: 10,
+    });
+
+    expect(result.data).toHaveLength(0);
+    expect(result.meta.total).toBe(0);
+  });
+
+  it('should order payroll runs by creation date descending', async () => {
+    // Create payroll runs with slight delay to ensure different timestamps
+    await createPayrollRun(listOrgId, listUserId, {
+      txHash: '0x' + '1'.repeat(64),
+      items: [{ contractorId: listContractorId, amountMnee: '1000' }],
+      runLabel: 'First Run',
+    });
+
+    await createPayrollRun(listOrgId, listUserId, {
+      txHash: '0x' + '2'.repeat(64),
+      items: [{ contractorId: listContractorId, amountMnee: '2000' }],
+      runLabel: 'Second Run',
+    });
+
+    const result = await listPayrollRuns(listOrgId, listUserId, {
+      page: 1,
+      limit: 10,
+    });
+
+    // Most recent should be first
+    expect(result.data[0]?.runLabel).toBe('Second Run');
+    expect(result.data[1]?.runLabel).toBe('First Run');
+  });
+
+  it('should get payroll run details with items', async () => {
+    const run = await createPayrollRun(listOrgId, listUserId, {
+      txHash: '0x' + 'a'.repeat(64),
+      items: [{ contractorId: listContractorId, amountMnee: '1000' }],
+      runLabel: 'Detail Test Run',
+    });
+
+    const detail = await getPayrollRun(listOrgId, run.id, listUserId);
+
+    expect(detail.id).toBe(run.id);
+    expect(detail.runLabel).toBe('Detail Test Run');
+    expect(detail.items).toHaveLength(1);
+    expect(detail.items[0]?.amountMnee).toBe('1000');
+    expect(detail.items[0]?.contractorName).toBe('Test Contractor');
+  });
+
+  it('should throw error for non-existent payroll run', async () => {
+    await expect(
+      getPayrollRun(listOrgId, 'non-existent-run-id', listUserId)
+    ).rejects.toThrow();
+  });
 });

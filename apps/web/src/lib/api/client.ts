@@ -66,6 +66,7 @@ interface RequestOptions {
   body?: unknown;
   params?: Record<string, string | number | undefined>;
   skipAuth?: boolean;
+  retries?: number;
 }
 
 // Refresh token lock to prevent multiple refresh requests
@@ -97,12 +98,38 @@ async function refreshAccessToken(): Promise<boolean> {
   }
 }
 
+/**
+ * Check if an error is retryable (network/timeout errors)
+ * Follows Requirement 3.3 for retry on transient failures.
+ */
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof TypeError && error.message.includes("fetch")) {
+    return true; // Network error
+  }
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    return (
+      message.includes("network") ||
+      message.includes("timeout") ||
+      message.includes("fetch failed")
+    );
+  }
+  return false;
+}
+
+/**
+ * Sleep for exponential backoff
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function request<T>(
   method: string,
   path: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { body, params, skipAuth = false } = options;
+  const { body, params, skipAuth = false, retries = 3 } = options;
 
   // Build URL with query params
   const url = new URL(`${API_URL}${path}`);
@@ -126,53 +153,87 @@ async function request<T>(
     }
   }
 
-  // Make request
-  let response = await fetch(url.toString(), {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let lastError: unknown;
 
-  // Handle 401 - try to refresh token
-  if (response.status === 401 && !skipAuth) {
-    if (!isRefreshing) {
-      isRefreshing = true;
-      refreshPromise = refreshAccessToken();
-    }
-
-    const refreshed = await refreshPromise;
-    isRefreshing = false;
-    refreshPromise = null;
-
-    if (refreshed) {
-      // Retry request with new token
-      const newToken = getAccessToken();
-      if (newToken) {
-        headers["Authorization"] = `Bearer ${newToken}`;
-      }
-      response = await fetch(url.toString(), {
+  // Retry loop with exponential backoff
+  // Follows Requirement 3.3: Retry failed API requests (3 attempts with exponential backoff)
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      // Make request
+      let response = await fetch(url.toString(), {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
       });
+
+      // Handle 401 - try to refresh token
+      if (response.status === 401 && !skipAuth) {
+        if (!isRefreshing) {
+          isRefreshing = true;
+          refreshPromise = refreshAccessToken();
+        }
+
+        const refreshed = await refreshPromise;
+        isRefreshing = false;
+        refreshPromise = null;
+
+        if (refreshed) {
+          // Retry request with new token
+          const newToken = getAccessToken();
+          if (newToken) {
+            headers["Authorization"] = `Bearer ${newToken}`;
+          }
+          response = await fetch(url.toString(), {
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : undefined,
+          });
+        }
+      }
+
+      // Handle 429 (rate limit) - retry with backoff
+      if (response.status === 429 && attempt < retries - 1) {
+        const backoffMs = Math.min(1000 * Math.pow(2, attempt), 10000);
+        await sleep(backoffMs);
+        continue;
+      }
+
+      // Handle errors
+      if (!response.ok) {
+        const error: ApiError = await response.json().catch(() => ({
+          code: "UNKNOWN_ERROR",
+          message: "An unknown error occurred",
+        }));
+        throw new ApiClientError(error);
+      }
+
+      // Handle empty responses
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
+      return response.json();
+    } catch (error) {
+      lastError = error;
+
+      // Don't retry non-retryable errors
+      if (!isRetryableError(error)) {
+        throw error;
+      }
+
+      // Don't retry on last attempt
+      if (attempt === retries - 1) {
+        throw error;
+      }
+
+      // Exponential backoff: 1s, 2s, 4s
+      const backoffMs = Math.min(1000 * Math.pow(2, attempt), 10000);
+      await sleep(backoffMs);
     }
   }
 
-  // Handle errors
-  if (!response.ok) {
-    const error: ApiError = await response.json().catch(() => ({
-      code: "UNKNOWN_ERROR",
-      message: "An unknown error occurred",
-    }));
-    throw new ApiClientError(error);
-  }
-
-  // Handle empty responses
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return response.json();
+  // Should never reach here, but throw last error if we do
+  throw lastError;
 }
 
 

@@ -3,10 +3,14 @@
  *
  * Handles treasury information retrieval including balance caching
  * and upcoming payroll calculations.
+ *
+ * @module services/treasury
+ * @see Requirements: Treasury management for MNEE token deposits and withdrawals
  */
 
 import { db } from '../lib/db.js';
 import { OrgError } from '../lib/errors.js';
+import { withRpcLogging } from '../lib/blockchain-logger.js';
 import { isMember } from './org.service.js';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -14,6 +18,9 @@ import { Decimal } from '@prisma/client/runtime/library';
 // Response Types
 // ============================================
 
+/**
+ * Treasury information response
+ */
 export interface TreasuryResponse {
   contractAddress: string;
   mneeBalance: string;
@@ -28,6 +35,9 @@ export interface TreasuryResponse {
 // Cache Management
 // ============================================
 
+/**
+ * Cached balance entry with timestamp
+ */
 interface BalanceCache {
   balance: string;
   timestamp: Date;
@@ -85,16 +95,28 @@ function setCachedBalance(orgId: string, balance: string): BalanceCache {
  * 3. Call balanceOf(treasuryAddress)
  * 
  * For now, returns a placeholder value.
+ * Uses withRpcLogging for structured logging of RPC operations.
+ *
+ * @param treasuryAddress - The treasury contract address
+ * @returns Promise resolving to the balance as a string
  */
-async function queryBlockchainBalance(_treasuryAddress: string): Promise<string> {
+async function queryBlockchainBalance(treasuryAddress: string): Promise<string> {
   // TODO: Implement actual blockchain query
   // const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
   // const mneeContract = new ethers.Contract(MNEE_ADDRESS, ERC20_ABI, provider);
   // const balance = await mneeContract.balanceOf(treasuryAddress);
   // return balance.toString();
   
-  // Placeholder: return "0" for now
-  return '0';
+  // Wrap the placeholder call with RPC logging for when real implementation is added
+  return withRpcLogging(
+    'eth_call',
+    async () => {
+      // Placeholder: return "0" for now
+      return '0';
+    },
+    { method: 'balanceOf', address: treasuryAddress },
+    { walletAddress: treasuryAddress }
+  );
 }
 
 // ============================================
@@ -102,10 +124,14 @@ async function queryBlockchainBalance(_treasuryAddress: string): Promise<string>
 // ============================================
 
 /**
- * Get treasury information for an organization
- * 
+ * Get treasury information for an organization.
  * Returns contract address, balance (cached if fresh), upcoming payroll total,
  * and whether the treasury has sufficient funds.
+ *
+ * @param orgId - The organization ID
+ * @param userId - The ID of the user requesting treasury info
+ * @returns Treasury information including balance and sufficiency status
+ * @throws {OrgError} If organization not found or user is not a member
  */
 export async function getTreasuryInfo(
   orgId: string,
@@ -187,16 +213,18 @@ export async function getTreasuryInfo(
 }
 
 /**
- * Invalidate the balance cache for an organization
- * Call this after a payroll run or deposit to force a fresh query
+ * Invalidate the balance cache for an organization.
+ * Call this after a payroll run or deposit to force a fresh query.
+ *
+ * @param orgId - The organization ID to invalidate cache for
  */
 export function invalidateBalanceCache(orgId: string): void {
   balanceCache.delete(orgId);
 }
 
 /**
- * Clear all cached balances
- * Useful for testing or maintenance
+ * Clear all cached balances.
+ * Useful for testing or maintenance.
  */
 export function clearAllBalanceCache(): void {
   balanceCache.clear();

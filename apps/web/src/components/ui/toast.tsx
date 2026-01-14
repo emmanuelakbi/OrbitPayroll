@@ -127,6 +127,17 @@ interface ToastItemProps extends VariantProps<typeof toastVariants> {
   onDismiss: () => void;
 }
 
+/**
+ * Accessible Toast Item component.
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Uses role="alert" for important notifications
+ * - aria-live="polite" for non-intrusive announcements
+ * - Dismiss button has accessible label
+ * - Focus ring on dismiss button
+ * 
+ * Validates: Requirements 7.1, 7.3
+ */
 function ToastItem({ toast, onDismiss }: ToastItemProps) {
   const [isExiting, setIsExiting] = React.useState(false);
 
@@ -153,9 +164,10 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         isExiting && "animate-out fade-out-0 slide-out-to-right-full duration-200"
       )}
       role="alert"
-      aria-live="polite"
+      aria-live={toast.type === "error" ? "assertive" : "polite"}
+      aria-atomic="true"
     >
-      <div className="flex-shrink-0">{iconMap[toast.type]}</div>
+      <div className="flex-shrink-0" aria-hidden="true">{iconMap[toast.type]}</div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold">{toast.title}</p>
         {toast.message && (
@@ -164,7 +176,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         {toast.action && (
           <button
             onClick={toast.action.onClick}
-            className="mt-2 text-sm font-medium underline underline-offset-2 hover:no-underline"
+            className="mt-2 text-sm font-medium underline underline-offset-2 hover:no-underline min-h-[44px] inline-flex items-center"
           >
             {toast.action.label}
           </button>
@@ -172,10 +184,10 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       </div>
       <button
         onClick={handleDismiss}
-        className="flex-shrink-0 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2"
-        aria-label="Dismiss"
+        className="flex-shrink-0 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2 min-h-[44px] min-w-[44px] flex items-center justify-center -mr-2"
+        aria-label={`Dismiss ${toast.title} notification`}
       >
-        <X className="h-4 w-4" />
+        <X className="h-4 w-4" aria-hidden="true" />
       </button>
     </div>
   );

@@ -16,6 +16,17 @@ interface TreasuryBalanceCardProps {
   onDeposit: () => void;
 }
 
+/**
+ * Accessible Treasury Balance Card component.
+ * 
+ * WCAG 2.1 AA Compliance:
+ * - Proper heading structure
+ * - Copy button has accessible label and feedback
+ * - Alert for insufficient balance uses role="alert"
+ * - External links indicate they open in new window
+ * 
+ * Validates: Requirements 7.1, 7.3, 7.5
+ */
 export function TreasuryBalanceCard({
   balance,
   contractAddress,
@@ -46,14 +57,15 @@ export function TreasuryBalanceCard({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5" />
+            <Wallet className="h-5 w-5" aria-hidden="true" />
             Treasury Balance
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Skeleton className="h-12 w-32" />
-          <Skeleton className="h-4 w-48" />
-          <Skeleton className="h-10 w-full" />
+        <CardContent className="space-y-4" role="status" aria-label="Loading treasury balance">
+          <Skeleton className="h-12 w-32" aria-hidden="true" />
+          <Skeleton className="h-4 w-48" aria-hidden="true" />
+          <Skeleton className="h-10 w-full" aria-hidden="true" />
+          <span className="sr-only">Loading treasury balance...</span>
         </CardContent>
       </Card>
     );
@@ -63,63 +75,71 @@ export function TreasuryBalanceCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Wallet className="h-5 w-5" />
+          <Wallet className="h-5 w-5" aria-hidden="true" />
           Treasury Balance
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Balance Display */}
         <div>
-          <p className="text-4xl font-bold">{formatMnee(balance)}</p>
-          <p className="text-sm text-muted-foreground">MNEE</p>
+          <p className="text-4xl font-bold" aria-label={`Treasury balance: ${formatMnee(balance)} MNEE`}>
+            {formatMnee(balance)}
+          </p>
+          <p className="text-sm text-muted-foreground" aria-hidden="true">MNEE</p>
         </div>
 
-        {/* Contract Address */}
-        <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-          <span className="text-sm text-muted-foreground">Contract:</span>
-          <code className="text-sm font-mono">
+        {/* Contract Address - Responsive layout */}
+        <div className="flex flex-col gap-2 p-3 bg-muted rounded-lg sm:flex-row sm:items-center">
+          <span className="text-sm text-muted-foreground" id="contract-label">Contract:</span>
+          <code className="text-sm font-mono break-all" aria-labelledby="contract-label">
             {formatAddress(contractAddress)}
           </code>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={handleCopyAddress}
-            title="Copy address"
-          >
-            {copied ? (
-              <Check className="h-4 w-4 text-green-500" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            asChild
-            title="View on explorer"
-          >
-            <a
-              href={`https://sepolia.etherscan.io/address/${contractAddress}`}
-              target="_blank"
-              rel="noopener noreferrer"
+          <div className="flex gap-1 mt-2 sm:mt-0 sm:ml-auto">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-11 w-11 p-0 sm:h-8 sm:w-8"
+              onClick={handleCopyAddress}
+              aria-label={copied ? "Address copied" : "Copy contract address"}
             >
-              <ExternalLink className="h-4 w-4" />
-            </a>
-          </Button>
+              {copied ? (
+                <Check className="h-4 w-4 text-green-500" aria-hidden="true" />
+              ) : (
+                <Copy className="h-4 w-4" aria-hidden="true" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-11 w-11 p-0 sm:h-8 sm:w-8"
+              asChild
+            >
+              <a
+                href={`https://sepolia.etherscan.io/address/${contractAddress}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="View contract on Etherscan (opens in new tab)"
+              >
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </Button>
+          </div>
         </div>
 
         {/* Upcoming Payroll Comparison */}
         {upcomingPayroll && (
-          <div className="space-y-2">
+          <dl className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Upcoming Payroll:</span>
-              <span className="font-medium">{formatMnee(upcomingPayroll)} MNEE</span>
+              <dt className="text-muted-foreground">Upcoming Payroll:</dt>
+              <dd className="font-medium">{formatMnee(upcomingPayroll)} MNEE</dd>
             </div>
             {!isSufficient && (
-              <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-                <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
+              <div 
+                className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg"
+                role="alert"
+                aria-live="polite"
+              >
+                <AlertCircle className="h-4 w-4 text-destructive mt-0.5" aria-hidden="true" />
                 <div className="text-sm">
                   <p className="font-medium text-destructive">Insufficient Balance</p>
                   <p className="text-muted-foreground">
@@ -128,7 +148,7 @@ export function TreasuryBalanceCard({
                 </div>
               </div>
             )}
-          </div>
+          </dl>
         )}
 
         {/* Deposit Button */}
