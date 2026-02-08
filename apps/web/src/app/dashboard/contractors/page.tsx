@@ -12,11 +12,7 @@ import {
   ContractorFormModal,
   ArchiveContractorModal,
 } from "@/components/contractors";
-import {
-  useDashboard,
-  QueryError,
-  EmptyState,
-} from "@/components/dashboard";
+import { useDashboard, QueryError, EmptyState } from "@/components/dashboard";
 import { api } from "@/lib/api";
 import type { Contractor, ContractorInput } from "@/lib/api/types";
 import { Plus, Search, Users } from "lucide-react";
@@ -36,7 +32,8 @@ export default function ContractorsPage() {
   // Modal state
   const [isFormModalOpen, setIsFormModalOpen] = React.useState(false);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = React.useState(false);
-  const [selectedContractor, setSelectedContractor] = React.useState<Contractor | null>(null);
+  const [selectedContractor, setSelectedContractor] =
+    React.useState<Contractor | null>(null);
 
   // Reset page when search changes
   React.useEffect(() => {
@@ -67,7 +64,9 @@ export default function ContractorsPage() {
     mutationFn: (data: ContractorInput) =>
       api.contractors.create(currentOrg!.id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contractors", currentOrg?.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["contractors", currentOrg?.id],
+      });
       setIsFormModalOpen(false);
       setSelectedContractor(null);
     },
@@ -75,10 +74,17 @@ export default function ContractorsPage() {
 
   // Update contractor mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<ContractorInput> }) =>
-      api.contractors.update(currentOrg!.id, id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<ContractorInput>;
+    }) => api.contractors.update(currentOrg!.id, id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contractors", currentOrg?.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["contractors", currentOrg?.id],
+      });
       setIsFormModalOpen(false);
       setSelectedContractor(null);
     },
@@ -88,7 +94,9 @@ export default function ContractorsPage() {
   const archiveMutation = useMutation({
     mutationFn: (id: string) => api.contractors.archive(currentOrg!.id, id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contractors", currentOrg?.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["contractors", currentOrg?.id],
+      });
       setIsArchiveModalOpen(false);
       setSelectedContractor(null);
     },
@@ -125,7 +133,7 @@ export default function ContractorsPage() {
   };
 
   const contractors = contractorsData?.data ?? [];
-  const pagination = contractorsData?.pagination;
+  const pagination = contractorsData?.meta;
 
   // TODO: Check user role for canManage - for now assume admin
   const canManage = true;
@@ -187,31 +195,36 @@ export default function ContractorsPage() {
 
             {/* Mobile Cards */}
             <div className="md:hidden p-4 space-y-4">
-              {isLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="p-4 border rounded-lg animate-pulse">
-                    <div className="h-4 w-32 bg-muted rounded mb-2" />
-                    <div className="h-3 w-24 bg-muted rounded" />
-                  </div>
-                ))
-              ) : (
-                contractors.map((contractor) => (
-                  <ContractorCard
-                    key={contractor.id}
-                    contractor={contractor}
-                    onEdit={handleEditContractor}
-                    onArchive={handleArchiveContractor}
-                    canManage={canManage}
-                  />
-                ))
-              )}
+              {isLoading
+                ? Array.from({ length: 3 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="p-4 border rounded-lg animate-pulse"
+                    >
+                      <div className="h-4 w-32 bg-muted rounded mb-2" />
+                      <div className="h-3 w-24 bg-muted rounded" />
+                    </div>
+                  ))
+                : contractors.map((contractor) => (
+                    <ContractorCard
+                      key={contractor.id}
+                      contractor={contractor}
+                      onEdit={handleEditContractor}
+                      onArchive={handleArchiveContractor}
+                      canManage={canManage}
+                    />
+                  ))}
             </div>
 
             {/* Empty State */}
             {!isLoading && contractors.length === 0 && (
               <EmptyState
                 icon={<Users className="h-6 w-6 text-muted-foreground" />}
-                title={debouncedSearch ? "No contractors found" : "No contractors yet"}
+                title={
+                  debouncedSearch
+                    ? "No contractors found"
+                    : "No contractors yet"
+                }
                 description={
                   debouncedSearch
                     ? "Try adjusting your search terms"
