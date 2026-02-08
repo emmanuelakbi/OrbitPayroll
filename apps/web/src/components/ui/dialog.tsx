@@ -192,22 +192,20 @@ function DialogContent({ children, className, ...props }: DialogContentProps) {
         aria-describedby={descriptionId}
         tabIndex={-1}
         className={cn(
-          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 animate-in fade-in-0 zoom-in-95 slide-in-from-left-1/2 slide-in-from-top-[48%] sm:rounded-lg",
+          "relative fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 animate-in fade-in-0 zoom-in-95 slide-in-from-left-1/2 slide-in-from-top-[48%] sm:rounded-lg",
           className,
         )}
         {...props}
       >
-        <div className="relative">
-          {children}
-          <button
-            type="button"
-            className="absolute right-0 top-0 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none min-h-[44px] min-w-[44px] flex items-center justify-center -mr-2 -mt-2"
-            onClick={() => onOpenChange(false)}
-            aria-label="Close dialog"
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
+        {children}
+        <button
+          type="button"
+          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
+          onClick={() => onOpenChange(false)}
+          aria-label="Close dialog"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
     </div>
   );
